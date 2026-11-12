@@ -15,6 +15,7 @@ frontend/build/
 # Database
 *.sqlite
 *.db
+!backend/echo.db
 backend/migrations/versions/
 
 # IDE

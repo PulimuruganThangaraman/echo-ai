@@ -104,6 +104,7 @@ def init_db():
             last_name TEXT,
             gender TEXT,
             age INTEGER,
+            age_unit TEXT DEFAULT 'Years',
             dob TEXT,
             mobile TEXT,
             phone1 TEXT,
@@ -156,6 +157,7 @@ def init_db():
         'ethnic_origin': 'TEXT',
         'fax': 'TEXT',
         'family_doctor': 'TEXT',
+        'age_unit': "TEXT DEFAULT 'Years'",
     }
     existing_patient_columns = {
         row[1] for row in c.execute('PRAGMA table_info(patients)').fetchall()
@@ -486,6 +488,8 @@ def _map_patient_row(row):
     patient['country'] = patient.get('country') or 'India'
     patient['fax'] = patient.get('fax') or ''
     patient['family_doctor'] = patient.get('family_doctor') or ''
+    patient['age_unit'] = patient.get('age_unit') or 'Years'
+    patient['visit_count'] = patient.get('visit_count', 0)
 
     return patient
 
@@ -528,8 +532,19 @@ def get_dashboard_stats():
 def get_patients():
     conn = get_db()
     patients = conn.execute('SELECT * FROM patients ORDER BY id DESC').fetchall()
+    visit_counts = {}
+    for r in conn.execute('SELECT patient_id, COUNT(*) as c FROM visits GROUP BY patient_id').fetchall():
+        visit_counts[str(r['patient_id'])] = r['c']
+
+    result = []
+    for p in patients:
+        row_dict = _map_patient_row(p)
+        c1 = visit_counts.get(str(p['id']), 0)
+        c2 = visit_counts.get(str(p['patient_id']), 0)
+        row_dict['visit_count'] = c1 if str(p['id']) == str(p['patient_id']) else (c1 + c2)
+        result.append(row_dict)
     conn.close()
-    return {"success": True, "data": [_map_patient_row(p) for p in patients]}
+    return {"success": True, "data": result}
 
 @app.get('/api/patients/{patient_id}')
 def get_patient(patient_id: str):
@@ -559,6 +574,7 @@ def create_patient(data: dict):
     last_name = data.get('last_name', '')
     gender = data.get('gender', 'M')
     age = int(data.get('age')) if data.get('age') and str(data.get('age')).isdigit() else None
+    age_unit = data.get('age_unit') or 'Years'
     dob = data.get('dob', '')
     mobile = data.get('mobile', '')
     phone1 = data.get('phone1', '')
@@ -592,15 +608,15 @@ def create_patient(data: dict):
     try:
         cursor.execute('''
             INSERT INTO patients (
-                patient_id, salutation, first_name, middle_name, last_name, gender, age, dob,
+                patient_id, salutation, first_name, middle_name, last_name, gender, age, age_unit, dob,
                 mobile, phone1, phone2, email, address, street, area, area_po, taluk,
                 city, district_city, state, pincode, zip_code, country, ethnic_origin,
                 aadhar_number, abha_number, blood_group, marital_status, occupation,
                 religion, nationality, emergency_contact_name, emergency_contact_phone,
                 emergency_contact_relation, fax, family_doctor, referred_by, registration_date, referred_by_doctor_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            patient_id, salutation, first_name, middle_name, last_name, gender, age, dob,
+            patient_id, salutation, first_name, middle_name, last_name, gender, age, age_unit, dob,
             mobile, phone1, phone2, email, street, street, area, area_po, taluk,
             city, city, state, pincode, pincode, country, ethnic_origin,
             aadhar_number, abha_number, blood_group, marital_status, occupation,
@@ -634,12 +650,13 @@ def update_patient(patient_id: int, data: dict):
     pincode = data.get('zip_code') or data.get('pincode') or ''
     aadhar_number = data.get('aadhaar_no') or data.get('aadhar_number') or ''
     age = int(data.get('age')) if data.get('age') and str(data.get('age')).isdigit() else None
+    age_unit = data.get('age_unit') or 'Years'
     
     try:
         cursor.execute('''
             UPDATE patients SET
                 patient_id = ?, salutation = ?, first_name = ?, middle_name = ?, last_name = ?, gender = ?,
-                age = ?, dob = ?, mobile = ?, phone1 = ?, phone2 = ?, email = ?,
+                age = ?, age_unit = ?, dob = ?, mobile = ?, phone1 = ?, phone2 = ?, email = ?,
                 address = ?, street = ?, area = ?, area_po = ?, taluk = ?, city = ?, district_city = ?,
                 state = ?, pincode = ?, zip_code = ?, country = ?, ethnic_origin = ?, aadhar_number = ?,
                 abha_number = ?, blood_group = ?, marital_status = ?, occupation = ?,
@@ -650,7 +667,7 @@ def update_patient(patient_id: int, data: dict):
             WHERE id = ?
         ''', (
             data.get('patient_id'), data.get('salutation'), data.get('first_name'), data.get('middle_name'),
-            data.get('last_name'), data.get('gender'), age, data.get('dob'), data.get('mobile'),
+            data.get('last_name'), data.get('gender'), age, age_unit, data.get('dob'), data.get('mobile'),
             data.get('phone1'), data.get('phone2'), data.get('email'), street, street, data.get('area'),
             data.get('area_po'), data.get('taluk'), city, city, data.get('state'), pincode, pincode,
             data.get('country', 'India'), data.get('ethnic_origin'), aadhar_number, data.get('abha_number'),
@@ -756,13 +773,39 @@ def delete_visit(patient_id: int, visit_id: int):
     conn.close()
     return {"success": True, "message": "Visit deleted successfully"}
 
+def _map_scan_row(scan_row):
+    if not scan_row:
+        return None
+    d = dict(scan_row)
+    findings = d.get('findings') or ''
+    if findings.strip().startswith('{') and findings.strip().endswith('}'):
+        try:
+            parsed = json.loads(findings)
+            if 'adult_echo_report' in parsed:
+                d['adult_echo_report'] = parsed['adult_echo_report']
+            elif parsed.get('scan_type') == 'Adult Echo' or d.get('scan_type') == 'Adult Echo':
+                d['adult_echo_report'] = parsed
+
+            if 'pediatric_echo_report' in parsed:
+                d['pediatric_echo_report'] = parsed['pediatric_echo_report']
+            elif parsed.get('scan_type') == 'Pediatric Echo' or d.get('scan_type') == 'Pediatric Echo':
+                d['pediatric_echo_report'] = parsed
+
+            if 'fetal_echo_report' in parsed:
+                d['fetal_echo_report'] = parsed['fetal_echo_report']
+            elif parsed.get('scan_type') == 'Fetal Echo' or d.get('scan_type') == 'Fetal Echo':
+                d['fetal_echo_report'] = parsed
+        except Exception:
+            pass
+    return d
+
 # Scans Endpoints
 @app.get('/api/scans')
 def get_scans():
     conn = get_db()
     scans = conn.execute('SELECT * FROM scans ORDER BY id DESC').fetchall()
     conn.close()
-    return {"success": True, "data": [dict(s) for s in scans]}
+    return {"success": True, "data": [_map_scan_row(s) for s in scans]}
 
 @app.get('/api/scans/{scan_id}')
 def get_scan(scan_id: int):
@@ -771,14 +814,14 @@ def get_scan(scan_id: int):
     conn.close()
     if not scan:
         raise HTTPException(status_code=404, detail="Scan not found")
-    return {"success": True, "data": dict(scan)}
+    return {"success": True, "data": _map_scan_row(scan)}
 
 @app.get('/api/scans/patient/{patient_id}')
 def get_scans_by_patient(patient_id: int):
     conn = get_db()
     scans = conn.execute('SELECT * FROM scans WHERE patient_id = ? ORDER BY id DESC', (patient_id,)).fetchall()
     conn.close()
-    return {"success": True, "data": [dict(s) for s in scans]}
+    return {"success": True, "data": [_map_scan_row(s) for s in scans]}
 
 @app.post('/api/scans')
 def create_scan(data: dict):
@@ -791,6 +834,13 @@ def create_scan(data: dict):
     scan_type = data.get('scan_type', 'Adult Echo')
     scan_date = data.get('scan_date') or datetime.now().isoformat()
     findings = data.get('findings', '')
+    if 'adult_echo_report' in data:
+        findings = json.dumps(data['adult_echo_report'])
+    elif 'pediatric_echo_report' in data:
+        findings = json.dumps(data['pediatric_echo_report'])
+    elif 'fetal_echo_report' in data:
+        findings = json.dumps(data['fetal_echo_report'])
+
     conclusion = data.get('conclusion', '')
     status = data.get('status', 'draft')
     abnormal = 1 if data.get('abnormal') else 0
@@ -824,24 +874,32 @@ def create_scan(data: dict):
     conn.commit()
     inserted = conn.execute('SELECT * FROM scans WHERE id = ?', (scan_id,)).fetchone()
     conn.close()
-    return {"success": True, "data": dict(inserted)}
+    return {"success": True, "data": _map_scan_row(inserted)}
 
 @app.put('/api/scans/{scan_id}')
 def update_scan(scan_id: int, data: dict):
     conn = get_db()
     cursor = conn.cursor()
     
+    findings = data.get('findings')
+    if 'adult_echo_report' in data:
+        findings = json.dumps(data['adult_echo_report'])
+    elif 'pediatric_echo_report' in data:
+        findings = json.dumps(data['pediatric_echo_report'])
+    elif 'fetal_echo_report' in data:
+        findings = json.dumps(data['fetal_echo_report'])
+
     cursor.execute('''
         UPDATE scans SET
             patient_id = ?, patient_display_id = ?, visit_id = ?, scan_type = ?, scan_date = ?,
-            findings = ?, conclusion = ?, status = ?, abnormal = ?, ambiguity = ?,
+            findings = COALESCE(?, findings), conclusion = ?, status = ?, abnormal = ?, ambiguity = ?,
             growthAbnormality = ?, normal = ?, normalVariant = ?, indication = ?, diagnosis = ?,
             referralDoctor = ?, primaryConsultant = ?, signedByLeft = ?, signedByRight = ?,
             typedBy = ?, reviewedBy = ?, icdCode = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (
         data.get('patient_id'), data.get('patient_display_id'), data.get('visit_id'),
-        data.get('scan_type'), data.get('scan_date'), data.get('findings'), data.get('conclusion'),
+        data.get('scan_type'), data.get('scan_date'), findings, data.get('conclusion'),
         data.get('status'), 1 if data.get('abnormal') else 0, 1 if data.get('ambiguity') else 0,
         1 if data.get('growthAbnormality') else 0, 1 if data.get('normal') else 0,
         1 if data.get('normalVariant') else 0, data.get('indication'), data.get('diagnosis'),
@@ -852,7 +910,8 @@ def update_scan(scan_id: int, data: dict):
     conn.commit()
     updated = conn.execute('SELECT * FROM scans WHERE id = ?', (scan_id,)).fetchone()
     conn.close()
-    return {"success": True, "data": dict(updated)}
+    return {"success": True, "data": _map_scan_row(updated)}
+
 
 @app.delete('/api/scans/{scan_id}')
 def delete_scan(scan_id: int):
