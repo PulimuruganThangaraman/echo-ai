@@ -218,20 +218,53 @@ All fields from the reference images have been implemented:
 
 © 2024 EchoScan. All rights reserved.
 
-## Deploy to Render with the included data
+## Deploy to Render (Separate Frontend & Backend)
 
-The repository includes a Render Blueprint and a Docker image that build the
-React frontend and serve it from the FastAPI backend as one web service.
+The repository is configured to deploy frontend and backend as two independent services on Render:
+1. **Backend Web Service**: FastAPI running on Python runtime with SQLite database (and optional persistent disk).
+2. **Frontend Static Site**: React Vite SPA on Render's global CDN (Free tier) with automatic SPA routing rewrites.
 
-The Render service uses a persistent disk mounted at `/var/data`. On its first
-start, the application copies the bundled `backend/echo.db` database to that
-disk, so the sample patients, visits, scans, doctors, reports, and settings are
-available immediately. Later changes are retained across restarts and deploys.
+### Method 1: Using Render Blueprint (Automatic Setup)
+1. Push this repository to GitHub.
+2. In Render, select **New +** → **Blueprint**.
+3. Select your repository `echo-ai` and branch `main`.
+4. Render detects `render.yaml` and provisions both services:
+   - `echoai-backend`: Web Service for the API.
+   - `echoai-frontend`: Static Site with `VITE_API_URL` automatically linked to the backend host.
+5. Click **Apply**.
 
-1. Push the repository to GitHub.
-2. In Render, choose **New > Blueprint**.
-3. Connect the GitHub repository and select the `main` branch.
-4. Render will detect `render.yaml`; approve the Blueprint and deploy it.
+---
 
-The Blueprint uses a paid Starter web service because Render persistent disks
-are not available on free web services.
+### Method 2: Manual Dashboard Setup (Free / Standard)
+
+#### Step 1: Deploy Backend (Web Service)
+1. In Render, click **New +** → **Web Service**.
+2. Connect your repository `PulimuruganThangaraman/echo-ai`.
+3. Set the following options:
+   - **Name**: `echoai-backend` (or your choice)
+   - **Root Directory**: `backend`
+   - **Environment**: `Python 3`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - **Health Check Path**: `/api/health`
+4. *(Optional - for persistent data)*: Under **Disks**, add a disk mounted at `/var/data` (requires Starter plan), and add environment variables:
+   - `DB_PATH`: `/var/data/echo.db`
+   - `UPLOADS_DIR`: `/var/data/uploads`
+5. Click **Create Web Service**. Note your backend URL (e.g., `https://echoai-backend.onrender.com`).
+
+#### Step 2: Deploy Frontend (Static Site)
+1. In Render, click **New +** → **Static Site**.
+2. Connect your repository `PulimuruganThangaraman/echo-ai`.
+3. Set the following options:
+   - **Name**: `echoai-frontend` (or your choice)
+   - **Root Directory**: `frontend`
+   - **Build Command**: `npm install && npm run build`
+   - **Publish Directory**: `dist`
+4. Add an Environment Variable:
+   - **Key**: `VITE_API_URL`
+   - **Value**: `https://echoai-backend.onrender.com` (your backend URL from Step 1)
+5. Add a Rewrite Rule (under **Redirects/Rewrites**):
+   - **Source**: `/*`
+   - **Destination**: `/index.html`
+   - **Action**: `Rewrite`
+6. Click **Create Static Site**.
