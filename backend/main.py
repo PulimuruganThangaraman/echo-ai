@@ -32,10 +32,46 @@ FRONTEND_DIST = os.environ.get(
 )
 
 def prepare_runtime_storage():
-    os.makedirs(os.path.dirname(os.path.abspath(DB_PATH)), exist_ok=True)
-    os.makedirs(UPLOADS_DIR, exist_ok=True)
-    if DB_PATH != DEFAULT_DB_PATH and not os.path.exists(DB_PATH):
-        shutil.copy2(DEFAULT_DB_PATH, DB_PATH)
+    global DB_PATH, UPLOADS_DIR
+    db_dir = os.path.dirname(os.path.abspath(DB_PATH))
+    try:
+        os.makedirs(db_dir, exist_ok=True)
+        # Test write permission in database directory
+        test_file = os.path.join(db_dir, '.perm_test')
+        with open(test_file, 'w') as f:
+            f.write('')
+        os.remove(test_file)
+    except (PermissionError, OSError) as e:
+        print(f"Warning: Cannot write to {db_dir} ({e}). Falling back to local/tmp storage.")
+        try:
+            test_file = os.path.join(BASE_DIR, '.perm_test')
+            with open(test_file, 'w') as f:
+                f.write('')
+            os.remove(test_file)
+            DB_PATH = DEFAULT_DB_PATH
+        except (PermissionError, OSError):
+            DB_PATH = os.path.join('/tmp', 'echo.db')
+
+    try:
+        os.makedirs(UPLOADS_DIR, exist_ok=True)
+        test_file = os.path.join(UPLOADS_DIR, '.perm_test')
+        with open(test_file, 'w') as f:
+            f.write('')
+        os.remove(test_file)
+    except (PermissionError, OSError):
+        fallback_uploads = os.path.join(BASE_DIR, 'uploads')
+        try:
+            os.makedirs(fallback_uploads, exist_ok=True)
+            UPLOADS_DIR = fallback_uploads
+        except (PermissionError, OSError):
+            UPLOADS_DIR = '/tmp/uploads'
+            os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+    if DB_PATH != DEFAULT_DB_PATH and not os.path.exists(DB_PATH) and os.path.exists(DEFAULT_DB_PATH):
+        try:
+            shutil.copy2(DEFAULT_DB_PATH, DB_PATH)
+        except Exception as e:
+            print(f"Warning: Could not copy template database to {DB_PATH}: {e}")
 
 class SQLiteConn:
     def __init__(self, path, timeout=60.0):
