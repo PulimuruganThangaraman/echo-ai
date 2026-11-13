@@ -492,27 +492,43 @@ function NewPatient() {
           </div>
 
           {/* Bottom Action Buttons */}
-          <div className="mt-3 bg-white rounded-lg shadow-sm border border-slate-200 p-2">
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200/90 p-3 sm:px-6 sm:py-3.5">
             {submitError && (
-              <p role="alert" className="mb-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700">{submitError}</p>
+              <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                {submitError}
+              </p>
             )}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => navigate('/search')} className="px-4 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition flex items-center gap-2 text-sm font-medium">
-                  <X className="w-4 h-4" /> Cancel
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => window.print()} className="px-4 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition flex items-center gap-2 text-sm font-medium">
-                  <Printer className="w-4 h-4" /> Preview
+            <div className="flex items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={() => navigate('/search')}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30"
+              >
+                <X className="w-4 h-4 text-slate-500" />
+                <span>Cancel</span>
+              </button>
+
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:border-teal-500 hover:bg-teal-50/60 hover:text-teal-800 active:bg-teal-100/60 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                >
+                  <Printer className="w-4 h-4 text-slate-500" />
+                  <span>Preview</span>
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || selectedScans.length === 0}
-                  title={selectedScans.length === 0 ? "Please select at least one scan type from the List of Scans" : "Save Patient"}
-                  className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center gap-2 text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
                 >
-                  <Save className="w-4 h-4" /> {isSubmitting ? 'Saving...' : 'Save Patient'}
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 text-white" />
+                  )}
+                  <span>{isSubmitting ? 'Saving...' : 'Save Patient'}</span>
                 </button>
               </div>
             </div>
