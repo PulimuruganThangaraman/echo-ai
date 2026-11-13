@@ -10,15 +10,19 @@ import {
   User,
   Plus,
   Trash2,
+  Printer,
+  Activity,
   ArrowLeft,
   ArrowRight,
-  UserPlus,
   Building,
   CheckCircle2,
+  UserCheck,
+  Stethoscope,
+  FileText,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
-import { referralDoctorService } from '../api/referralDoctorService'
+import { workspaceService } from '../api/workspaceService'
 import AddableSelect from '../components/AddableSelect'
 import ReferralDoctorModal from '../components/ReferralDoctorModal'
 import {
@@ -26,6 +30,7 @@ import {
   getCitiesForState,
   getDialCode,
   lookupPincode,
+  calculateAge,
   calculateAgeWithUnit,
   calculateAgeForUnit,
   COUNTRY_DIAL_CODES,
@@ -72,13 +77,26 @@ function EditPatient() {
   })
 
   const [visits, setVisits] = useState([])
+  const [selectedScans, setSelectedScans] = useState([])
+  const [templates, setTemplates] = useState([])
   const [existingScans, setExistingScans] = useState([])
-  const [referralDoctorsList, setReferralDoctorsList] = useState([])
   const [loading, setLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [isReferralModalOpen, setIsReferralModalOpen] = useState(false)
   const [zipLookupStatus, setZipLookupStatus] = useState('')
+
+  const getInitialVisitDate = () => {
+    const now = new Date()
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  }
+
+  const [newVisitInput, setNewVisitInput] = useState({
+    visit_date: getInitialVisitDate(),
+    scan_type: 'Adult Echo',
+    report_template_id: '',
+    notes: '',
+  })
 
   const countries = Object.keys(COUNTRY_DIAL_CODES)
   const availableStates = getStatesForCountry(formData.country)
@@ -86,22 +104,6 @@ function EditPatient() {
   const ethnicOrigins = ['Indian', 'Asian', 'African', 'European', 'Other']
   const salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Baby', 'Master']
   const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
-
-  // Load referral doctors for datalist
-  const loadReferralDoctors = useCallback(async () => {
-    try {
-      const res = await referralDoctorService.getReferralDoctors()
-      if (res?.data) {
-        setReferralDoctorsList(res.data)
-      }
-    } catch (err) {
-      console.error('Error fetching referral doctors:', err)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadReferralDoctors()
-  }, [loadReferralDoctors])
 
   // Fetch patient data, visits, and scans
   useEffect(() => {
@@ -112,74 +114,43 @@ function EditPatient() {
       patientService.getPatient(id),
       patientService.getVisits(id).catch(() => ({ data: [] })),
       scanService.getScans().catch(() => ({ data: [] })),
+      workspaceService.getTemplates().catch(() => ({ data: [] })),
     ])
-      .then(([patientRes, visitsRes, scansRes]) => {
+      .then(([patientRes, visitsRes, scansRes, tmplRes]) => {
         if (!isMounted) return
-        const p = patientRes?.data || patientRes || {}
+        setTemplates(tmplRes?.data || [])
+        if (patientRes?.success || patientRes?.data || patientRes?.patient_id) {
+          const patientData = patientRes.data || patientRes
+          setFormData((prev) => ({
+            ...prev,
+            ...patientData,
+            age_unit: patientData.age_unit || 'Years',
+            country: patientData.country || 'India',
+          }))
 
-        setFormData({
-          patient_id: p.patient_id || '',
-          salutation: p.salutation || 'Mr.',
-          first_name: p.first_name || '',
-          last_name: p.last_name || '',
-          middle_name: p.middle_name || '',
-          age: p.age !== undefined && p.age !== null ? String(p.age) : '',
-          age_unit: p.age_unit || 'Years',
-          dob: p.dob || '',
-          gender: p.gender || 'M',
-          marital_status: p.marital_status || '',
-          ethnic_origin: p.ethnic_origin || '',
-          street: p.street || p.address || '',
-          zip_code: p.zip_code || p.pincode || '',
-          country: p.country || 'India',
-          state: p.state || '',
-          district_city: p.district_city || p.city || '',
-          email: p.email || '',
-          phone1: p.phone1 || '',
-          phone2: p.phone2 || '',
-          mobile: p.mobile || '',
-          fax: p.fax || '',
-          aadhaar_no: p.aadhaar_no || p.aadhar_number || '',
-          family_doctor: p.family_doctor || '',
-          taluk: p.taluk || '',
-          area: p.area || '',
-          area_po: p.area_po || '',
-        })
+          // Load visits
+          const vList = visitsRes?.data || (Array.isArray(visitsRes) ? visitsRes : [])
+          if (Array.isArray(vList) && vList.length > 0) {
+            setVisits(vList)
+          }
 
-        const rawVisits = visitsRes?.data || visitsRes || []
-        const formattedVisits = rawVisits.map((v) => ({
-          ...v,
-          scan_type: v.scan_type || v.visit_type || 'Adult Echo',
-          report_template: v.report_template || 'Standard Echo Report',
-        }))
-
-        if (formattedVisits.length === 0) {
-          const now = new Date()
-          const formattedDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-            .toISOString()
-            .slice(0, 16)
-          setVisits([
-            {
-              id: Date.now(),
-              visit_date: formattedDateTime,
-              scan_type: 'Adult Echo',
-              report_template: 'Standard Echo Report',
-              referral_doctor: p.family_doctor || '',
-              notes: '',
-              isNew: true,
-            },
-          ])
-        } else {
-          setVisits(formattedVisits)
+          // Pre-select patient's scans
+          const allScans = scansRes?.data || (Array.isArray(scansRes) ? scansRes : [])
+          const patientScans = allScans.filter(
+            (s) =>
+              String(s.patient_id) === String(id) ||
+              String(s.patient_id) === String(patientData.patient_id),
+          )
+          setExistingScans(patientScans)
+          const scanTypes = Array.from(new Set(patientScans.map((s) => s.scan_type).filter(Boolean)))
+          setSelectedScans(scanTypes)
         }
-
-        const allScans = scansRes?.data || scansRes || []
-        const patientScans = allScans.filter((s) => String(s.patient_id) === String(id))
-        setExistingScans(patientScans)
       })
-      .catch((err) => {
-        console.error('Error fetching patient data:', err)
-        setSubmitError('Failed to load patient data.')
+      .catch((error) => {
+        console.error('Error fetching patient data:', error)
+        if (isMounted) {
+          setSubmitError('Error loading patient data. Please try again.')
+        }
       })
       .finally(() => {
         if (isMounted) setLoading(false)
@@ -196,7 +167,7 @@ function EditPatient() {
       ...prev,
       dob,
       age: calculated.age,
-      age_unit: calculated.unit || prev.age_unit || 'Years',
+      age_unit: calculated.unit || prev.age_unit || 'Years'
     }))
   }, [])
 
@@ -237,122 +208,108 @@ function EditPatient() {
     }
   }, [])
 
-  const handleAddVisit = () => {
-    const now = new Date()
-    const formattedDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
-      .toISOString()
-      .slice(0, 16)
-    setVisits((prev) => [
+  const handleAddVisitDirect = () => {
+    if (!newVisitInput.visit_date) return
+    const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
+    const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || selectedScans[0] || 'Adult Echo'
+    const newEntry = {
+      id: Date.now(),
+      visit_date: newVisitInput.visit_date,
+      scan_type: entryScanType,
+      report_template_id: newVisitInput.report_template_id,
+      referral_doctor: formData.family_doctor || '',
+      notes: newVisitInput.notes || '',
+      image_count: 0,
+      avi: 0,
+      pregnancy: 0,
+      ob: '',
+      isNew: true,
+    }
+    setVisits((prev) => [...prev, newEntry])
+    if (entryScanType && !selectedScans.includes(entryScanType)) {
+      setSelectedScans((prev) => [...prev, entryScanType])
+    }
+    setNewVisitInput((prev) => ({
       ...prev,
-      {
-        id: Date.now(),
-        visit_date: formattedDateTime,
-        scan_type: 'Adult Echo',
-        report_template: 'Standard Echo Report',
-        referral_doctor: formData.family_doctor || '',
-        notes: '',
-        isNew: true,
-      },
-    ])
+      notes: '',
+    }))
+  }
+
+  const handleAddVisit = () => {
+    handleAddVisitDirect()
   }
 
   const handleUpdateVisit = (visitId, field, value) => {
-    setVisits((prev) => prev.map((v) => (v.id === visitId ? { ...v, [field]: value } : v)))
+    setVisits(visits.map((v) => (v.id === visitId ? { ...v, [field]: value } : v)))
   }
 
   const handleDeleteVisit = (visitId) => {
-    if (visits.length <= 1) return
-    setVisits((prev) => prev.filter((v) => v.id !== visitId))
+    setVisits(visits.filter((v) => v.id !== visitId))
+  }
+
+  const toggleScan = (scanType) => {
+    setSelectedScans((prev) =>
+      prev.includes(scanType) ? prev.filter((s) => s !== scanType) : [...prev, scanType],
+    )
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    if (selectedScans.length === 0) {
+      setSubmitError('Please select at least one scan type (Adult Echo, Fetal Echo, or Pediatric Echo) from the List of Scans before updating.')
+      return
+    }
     setSubmitError('')
-
-    if (!formData.mobile?.trim()) {
-      setSubmitError('Mobile number is mandatory. Please enter patient mobile number.')
-      return
-    }
-
-    if (!formData.first_name?.trim()) {
-      setSubmitError('First name is mandatory. Please enter patient first name.')
-      return
-    }
-
-    const submitAction = e.nativeEvent?.submitter?.value || 'save'
     setIsSubmitting(true)
 
     try {
       await patientService.updatePatient(id, formData)
 
-      const savedVisits = []
-      const savedScans = []
-
-      // Save any newly added or updated visits
+      // Save any newly added visits
       for (const visit of visits.filter((v) => v.visit_date)) {
         if (visit.isNew || typeof visit.id === 'number') {
           const { id: _vid, isNew, ...visitPayload } = visit
-          const vResult = await patientService.addVisit(id, {
-            ...visitPayload,
-            visit_type: visit.scan_type || 'Adult Echo',
-            scan_type: visit.scan_type || 'Adult Echo',
-            report_template: visit.report_template || 'Standard Echo Report',
-            referral_doctor: visit.referral_doctor || formData.family_doctor || '',
-          })
-          const createdV = vResult.data
-          savedVisits.push(createdV)
-
-          // Create scan for this visit if needed
-          const sResult = await scanService.createScan({
-            patient_id: id,
-            patient_display_id: formData.patient_id,
-            visit_id: createdV.id,
-            scan_type: visit.scan_type || 'Adult Echo',
-            status: 'draft',
-            referralDoctor: visit.referral_doctor || formData.family_doctor || '',
-            indication: visit.notes || '',
-          })
-          savedScans.push(sResult.data)
-        } else {
-          await patientService.updateVisit(id, visit.id, {
-            ...visit,
-            visit_type: visit.scan_type || 'Adult Echo',
-            scan_type: visit.scan_type || 'Adult Echo',
-            report_template: visit.report_template || 'Standard Echo Report',
-            referral_doctor: visit.referral_doctor || formData.family_doctor || '',
-          }).catch(() => {})
-          savedVisits.push(visit)
+          await patientService.addVisit(id, visitPayload).catch(() => {})
         }
       }
 
-      if (submitAction === 'next') {
-        const targetScan = savedScans[0] || existingScans[0]
-        const scanType = targetScan?.scan_type || visits[0]?.scan_type || 'Adult Echo'
-        const scanId = targetScan?.id
-        const visitId = savedVisits[0]?.id || ''
-
-        if (scanType === 'Fetal Echo') {
-          navigate(scanId ? `/fetal-echo-report/${scanId}?patientId=${id}&visitId=${visitId}` : `/fetal-echo-report?patientId=${id}`)
-        } else if (scanType === 'Pediatric Echo') {
-          navigate(scanId ? `/pediatric-echo-report/${scanId}?patientId=${id}&visitId=${visitId}` : `/pediatric-echo-report?patientId=${id}`)
-        } else {
-          navigate(scanId ? `/adult-echo-report/${scanId}?patientId=${id}&visitId=${visitId}` : `/adult-echo-report?patientId=${id}`)
+      // Ensure any newly selected scan types are created
+      for (const scanType of selectedScans) {
+        const alreadyHasScan = existingScans.some((s) => s.scan_type === scanType)
+        if (!alreadyHasScan) {
+          await scanService.createScan({
+            patient_id: id,
+            patient_display_id: formData.patient_id,
+            visit_id: visits[0]?.id || '',
+            scan_type: scanType,
+            status: 'draft',
+          }).catch(() => {})
         }
+      }
+
+      // Check if user clicked "Go to Scan"
+      const shouldGoToScan = e.nativeEvent?.submitter?.value === 'reporting'
+      if (shouldGoToScan) {
+        const targetType = selectedScans[0] || 'Adult Echo'
+        navigate(`/echo-studies?type=${encodeURIComponent(targetType)}&patient=${id}`)
       } else {
         navigate('/patients')
       }
     } catch (error) {
       console.error('Error updating patient:', error)
-      setSubmitError(error.response?.data?.detail || 'Unable to update patient. Please check required fields.')
+      setSubmitError(
+        error.response?.data?.detail ||
+          'Unable to update the patient. Please verify the required fields.',
+      )
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const inputClass =
-    'w-full px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition'
+    'w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition text-xs sm:text-sm text-slate-800 bg-white'
   const selectClass =
-    'w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg text-sm text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition appearance-none'
+    'w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition appearance-none bg-white text-xs sm:text-sm text-slate-800'
   const labelClass = 'block text-xs font-semibold text-slate-700 mb-1.5'
   const dialCode = getDialCode(formData.country)
   const patientInitials = getInitials(formData.first_name, formData.last_name)
@@ -360,10 +317,10 @@ function EditPatient() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="h-10 w-10 animate-spin rounded-full border-3 border-teal-600 border-t-transparent mx-auto" />
-          <p className="mt-3 text-sm font-semibold text-slate-600">Loading patient record...</p>
+      <div className="flex h-64 w-full items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" />
+          <span className="text-xs font-medium text-slate-500">Loading patient record...</span>
         </div>
       </div>
     )
@@ -371,30 +328,40 @@ function EditPatient() {
 
   return (
     <>
-      <form onSubmit={handleSubmit} className="h-full overflow-auto bg-gradient-to-br from-slate-50 to-slate-100 p-3 sm:p-5">
-        <div className="w-full max-w-7xl mx-auto space-y-6">
-
-          {/* Top Patient Header Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <form
+        onSubmit={handleSubmit}
+        className="h-full overflow-auto bg-gradient-to-br from-slate-50 to-slate-100 p-2 lg:p-3"
+      >
+        <div className="w-full">
+          {/* Top Page Header Bar */}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => navigate('/patients')}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition"
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-2xs hover:bg-slate-50 transition"
+                title="Back to Patients"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-sm font-bold text-white shadow-xs">
-                {patientInitials}
-              </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-lg font-bold text-slate-900">{fullName}</h1>
-                  <span className="font-mono text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
-                    {formData.patient_id || 'ID Pending'}
+                <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+                  <span
+                    onClick={() => navigate('/patients')}
+                    className="cursor-pointer hover:text-slate-700 transition"
+                  >
+                    Patients
                   </span>
+                  <span>/</span>
+                  <span className="font-mono text-emerald-700 font-semibold">
+                    {formData.patient_id || id}
+                  </span>
+                  <span>/</span>
+                  <span className="text-slate-600 font-semibold">Edit Patient Details</span>
                 </div>
-                <p className="text-xs text-slate-500">Edit demographic and clinical scan details</p>
+                <h1 className="text-lg font-bold text-slate-900 tracking-tight mt-0.5">
+                  Update Patient Information · {fullName}
+                </h1>
               </div>
             </div>
 
@@ -406,544 +373,714 @@ function EditPatient() {
             </div>
           </div>
 
-          {/* 1. Basic Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <User className="w-4 h-4 text-teal-600" /> Basic Patient Information
-              </h2>
-              <span className="text-xs text-slate-500">
-                Fields marked with <span className="text-red-500 font-bold">*</span> are mandatory
-              </span>
+          {/* Responsive 4-Column Layout (Matching New Patient Page) */}
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
+            {/* Left 3 Columns: Main Form Sections */}
+            <div className="xl:col-span-3 space-y-6">
+              {/* Basic Information Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
+                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <User className="w-4 h-4 text-teal-600" /> Basic Information
+                  </h2>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className={labelClass}>Patient ID *</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.patient_id}
+                        onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
+                        required
+                        placeholder="e.g., TM00100"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Salutation</label>
+                      <AddableSelect
+                        field="patient_salutation"
+                        className={selectClass}
+                        options={salutations}
+                        value={formData.salutation}
+                        onChange={(value) => setFormData({ ...formData, salutation: value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>First Name *</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.first_name}
+                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Parent / Spouse Name</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.last_name}
+                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Middle Name</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.middle_name}
+                        onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Date of Birth</label>
+                      <div className="relative">
+                        <input
+                          type="date"
+                          className={`${inputClass} pr-10`}
+                          value={formData.dob}
+                          onChange={(e) => handleDobChange(e.target.value)}
+                        />
+                        <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      </div>
+                      {formData.dob && formData.age && (
+                        <p className="mt-1 text-xs text-teal-600 font-medium">
+                          Age: {formData.age} {formData.age_unit || 'Years'}
+                        </p>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelClass}>Age</label>
+                        <input
+                          type="number"
+                          className={inputClass}
+                          value={formData.age}
+                          onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                          placeholder="Age"
+                        />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Unit</label>
+                        <select
+                          className={selectClass}
+                          value={formData.age_unit || 'Years'}
+                          onChange={(e) => {
+                            const newUnit = e.target.value;
+                            const newAge = formData.dob ? calculateAgeForUnit(formData.dob, newUnit) : formData.age;
+                            setFormData({ ...formData, age_unit: newUnit, age: newAge });
+                          }}
+                        >
+                          <option value="Years">Years</option>
+                          <option value="Months">Months</option>
+                          <option value="Days">Days</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Gender</label>
+                      <div className="flex items-center gap-3 mt-2">
+                        {['M', 'F', 'UA'].map((g) => (
+                          <label key={g} className="flex items-center gap-1.5 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="gender"
+                              value={g}
+                              checked={formData.gender === g}
+                              onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                              className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                            />
+                            <span className="text-sm text-slate-700 font-medium">{g}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Marital Status</label>
+                      <AddableSelect
+                        field="patient_marital_status"
+                        className={selectClass}
+                        options={maritalStatuses}
+                        value={formData.marital_status}
+                        onChange={(value) =>
+                          setFormData({ ...formData, marital_status: value })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Ethnic Origin</label>
+                      <AddableSelect
+                        field="patient_ethnic_origin"
+                        className={selectClass}
+                        options={ethnicOrigins}
+                        value={formData.ethnic_origin}
+                        onChange={(value) =>
+                          setFormData({ ...formData, ethnic_origin: value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Address Information Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
+                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-teal-600" /> Address Information
+                  </h2>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="lg:col-span-2">
+                      <label className={labelClass}>Street Address</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.street}
+                        onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                        placeholder="House / Flat No., Street Name"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Taluk</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.taluk}
+                        onChange={(e) => setFormData({ ...formData, taluk: e.target.value })}
+                        placeholder="Auto-filled by zip code"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Area</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.area}
+                        onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Area (P.O.)</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.area_po}
+                        onChange={(e) => setFormData({ ...formData, area_po: e.target.value })}
+                        placeholder="Auto-filled by zip code"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Zip Code</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.zip_code}
+                        onChange={(e) => handleZipChange(e.target.value)}
+                        maxLength={10}
+                        placeholder="Enter zip / pincode"
+                      />
+                      {zipLookupStatus === 'found' && (
+                        <p className="mt-1 text-xs text-teal-600 font-medium">
+                          Taluk and Post auto-filled
+                        </p>
+                      )}
+                      {zipLookupStatus === 'notfound' && (
+                        <p className="mt-1 text-xs text-amber-500 font-medium">
+                          Pincode not in database - fill manually
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelClass}>Country</label>
+                      <AddableSelect
+                        field="patient_country"
+                        className={selectClass}
+                        options={countries}
+                        value={formData.country}
+                        onChange={handleCountryChange}
+                      />
+                      {dialCode && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Dial code:{' '}
+                          <span className="font-semibold text-slate-700">{dialCode}</span>
+                        </p>
+                      )}
+                    </div>
+                    <div>
+                      <label className={labelClass}>State</label>
+                      <AddableSelect
+                        field="patient_state"
+                        className={selectClass}
+                        options={availableStates}
+                        value={formData.state}
+                        onChange={handleStateChange}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>District/City</label>
+                      <AddableSelect
+                        field="patient_district_city"
+                        className={selectClass}
+                        options={availableCities}
+                        value={formData.district_city}
+                        onChange={(value) =>
+                          setFormData({ ...formData, district_city: value })
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact Information Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
+                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-teal-600" /> Contact Information
+                  </h2>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className={labelClass}>Phone #1</label>
+                      <input
+                        type="tel"
+                        className={inputClass}
+                        value={formData.phone1}
+                        onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Phone #2</label>
+                      <input
+                        type="tel"
+                        className={inputClass}
+                        value={formData.phone2}
+                        onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Mobile #</label>
+                      <div className="flex gap-1">
+                        {dialCode && (
+                          <span className="flex items-center px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 whitespace-nowrap select-none">
+                            {dialCode}
+                          </span>
+                        )}
+                        <input
+                          type="tel"
+                          className={`${inputClass} flex-1`}
+                          value={formData.mobile}
+                          onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                          placeholder="Mobile number"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelClass}>Fax #</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.fax}
+                        onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
+                      />
+                    </div>
+                    <div className="lg:col-span-2">
+                      <label className={labelClass}>Email</label>
+                      <input
+                        type="email"
+                        className={inputClass}
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="patient@example.com"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Information Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
+                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Building className="w-4 h-4 text-teal-600" /> Additional Information
+                  </h2>
+                </div>
+                <div className="p-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className={labelClass}>Aadhaar No</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.aadhaar_no}
+                        onChange={(e) =>
+                          setFormData({ ...formData, aadhaar_no: e.target.value })
+                        }
+                        placeholder="XXXX XXXX XXXX"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Family / Referral Doctor</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className={inputClass}
+                          value={formData.family_doctor}
+                          onChange={(e) =>
+                            setFormData({ ...formData, family_doctor: e.target.value })
+                          }
+                          placeholder="Doctor or hospital name"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setIsReferralModalOpen(true)}
+                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition text-xs font-semibold whitespace-nowrap"
+                        >
+                          Select Doctor
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Visits Section - Exactly as mockup */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+                  <div>
+                    <h2 className="font-semibold text-slate-900 flex items-center gap-2">
+                      <Calendar className="h-4 w-4 text-teal-600" />
+                      <span>Visits ({visits.length})</span>
+                    </h2>
+                    <p className="text-xs text-slate-500">Add and review clinical visits for the selected patient.</p>
+                  </div>
+                </div>
+
+                {/* Banner: Linked patient */}
+                <div className="flex items-center gap-3 border-b border-teal-200/70 bg-teal-50/70 px-4 py-2.5 text-sm text-teal-900">
+                  <UserCheck className="h-4 w-4 text-teal-600 shrink-0" />
+                  <span>
+                    New visits will be linked to{' '}
+                    <strong>
+                      {formData.patient_id || 'PATIENT'} — {formData.first_name || ''} {formData.last_name || ''}
+                    </strong>
+                  </span>
+                </div>
+
+                {/* Form Row: Visit date and time, Scan type, Report template, Visit notes, Add visit button */}
+                <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-[190px_160px_1fr_1fr_auto] items-end">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Visit date and time *
+                    </label>
+                    <input
+                      type="datetime-local"
+                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                      value={newVisitInput.visit_date}
+                      onChange={(e) => setNewVisitInput({ ...newVisitInput, visit_date: e.target.value })}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Scan type
+                    </label>
+                    <select
+                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                      value={newVisitInput.scan_type}
+                      onChange={(e) => setNewVisitInput({ ...newVisitInput, scan_type: e.target.value })}
+                    >
+                      <option value="Adult Echo">Adult Echo</option>
+                      <option value="Fetal Echo">Fetal Echo</option>
+                      <option value="Pediatric Echo">Pediatric Echo</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Report template
+                    </label>
+                    <select
+                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                      value={newVisitInput.report_template_id}
+                      onChange={(e) => {
+                        const tmplId = e.target.value
+                        const tmpl = templates.find((t) => String(t.id) === String(tmplId))
+                        setNewVisitInput((prev) => ({
+                          ...prev,
+                          report_template_id: tmplId,
+                          scan_type: tmpl?.scan_type || prev.scan_type,
+                        }))
+                      }}
+                    >
+                      <option value="">Select template</option>
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.title || template.name || template.scan_type}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                      Visit notes
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 placeholder:text-slate-400"
+                      placeholder="Visit notes"
+                      value={newVisitInput.notes}
+                      onChange={(e) => setNewVisitInput({ ...newVisitInput, notes: e.target.value })}
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddVisitDirect}
+                    disabled={!newVisitInput.visit_date}
+                    className="h-10 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white font-medium text-sm transition flex items-center justify-center gap-2 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>Add visit</span>
+                  </button>
+                </div>
+
+                {/* Secondary Action Row: New referral doctor, Save and go to reporting */}
+                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 bg-white">
+                  <button
+                    type="button"
+                    onClick={() => setIsReferralModalOpen(true)}
+                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:border-slate-400"
+                  >
+                    <Stethoscope className="h-4 w-4 text-teal-600" />
+                    <span>New referral doctor</span>
+                  </button>
+                  <button
+                    type="submit"
+                    value="reporting"
+                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 active:bg-teal-900 px-4 text-xs font-semibold text-white shadow-2xs transition"
+                  >
+                    <FileText className="h-4 w-4 text-white" />
+                    <span>Save and go to reporting</span>
+                  </button>
+                </div>
+
+                {/* Visits Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50/80 border-b border-slate-200">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">No.</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Patient</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Visit date</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Scan type</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Referral doctor</th>
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Notes</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {visits.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="px-4 py-8 text-center text-sm text-slate-500">
+                            No visits recorded. Use the form above to add a visit.
+                          </td>
+                        </tr>
+                      ) : (
+                        visits.map((visit, index) => {
+                          const displayDate = visit.visit_date
+                            ? new Date(visit.visit_date).toLocaleString('en-US', {
+                                day: '2-digit',
+                                month: '2-digit',
+                                year: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit',
+                                second: '2-digit',
+                                hour12: true,
+                              })
+                            : '—'
+                          return (
+                            <tr key={visit.id || index} className="hover:bg-slate-50/80 transition">
+                              <td className="px-4 py-3 text-slate-700">{index + 1}</td>
+                              <td className="px-4 py-3">
+                                <div className="font-semibold text-slate-900">{formData.patient_id || '—'}</div>
+                                <div className="text-xs text-slate-500">
+                                  {formData.first_name} {formData.last_name}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">{displayDate}</td>
+                              <td className="px-4 py-3">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                  {visit.scan_type || visit.visit_type || selectedScans[0] || 'Adult Echo'}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-slate-700">
+                                {visit.referral_doctor || formData.family_doctor || '—'}
+                              </td>
+                              <td className="px-4 py-3 text-slate-500">{visit.notes || '—'}</td>
+                              <td className="px-4 py-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteVisit(visit.id)}
+                                  className="text-red-500 hover:text-red-700 p-1 rounded transition hover:bg-red-50"
+                                  title="Delete visit"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
-            <div className="p-4 sm:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* 1. Mobile Number - MUST COME VERY FIRST AND IS MANDATORY */}
-                <div className="bg-teal-50/40 p-2.5 rounded-lg border border-teal-200/80">
-                  <label className="block text-xs font-semibold text-teal-900 mb-1">
-                    Mobile Number <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <div className="flex gap-1.5">
-                    {dialCode && (
-                      <span className="flex items-center px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-bold text-slate-700 whitespace-nowrap select-none">
-                        {dialCode}
+
+            {/* Right Column: Sidebar (List of Scans, Patient Summary & Quick Actions) */}
+            <div className="space-y-4">
+              {/* Quick Patient Profile Summary */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#1e3a8a] text-sm font-bold text-white shadow-2xs">
+                    {patientInitials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
+                    <p className="font-mono text-xs font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded inline-block mt-0.5">
+                      {formData.patient_id || 'ID Pending'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 font-medium">Age & Sex:</span>
+                    <p className="font-semibold text-slate-700">
+                      {[formData.age ? `${formData.age} ${formData.age_unit || 'Years'}` : '', formData.gender]
+                        .filter(Boolean)
+                        .join(' · ') || '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 font-medium">City:</span>
+                    <p className="font-semibold text-slate-700 truncate">
+                      {formData.district_city || formData.state || '—'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* List of Scans Card */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-rose-50 to-white flex items-center justify-between">
+                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-rose-600" /> List of Scans *
+                  </h2>
+                  {selectedScans.length === 0 ? (
+                    <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                      Required
+                    </span>
+                  ) : (
+                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                      ✓ {selectedScans.length} Selected
+                    </span>
+                  )}
+                </div>
+                <div className="p-3 space-y-2">
+                  {['Adult Echo', 'Fetal Echo', 'Pediatric Echo'].map((scanType) => (
+                    <div
+                      key={scanType}
+                      role="button"
+                      tabIndex={0}
+                      onDoubleClick={(event) => {
+                        event.preventDefault()
+                        navigate(
+                          `/echo-studies?type=${encodeURIComponent(scanType)}&patient=${id}`,
+                        )
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter')
+                          navigate(
+                            `/echo-studies?type=${encodeURIComponent(scanType)}&patient=${id}`,
+                          )
+                      }}
+                      title={`Double-click to open ${scanType}`}
+                      className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50 group cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedScans.includes(scanType)}
+                        onChange={() => toggleScan(scanType)}
+                        className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-700 group-hover:text-teal-700">
+                          {scanType}
+                        </span>
+                        <span className="block text-[11px] text-slate-400">
+                          Double-click to open
+                        </span>
                       </span>
-                    )}
-                    <input
-                      type="tel"
-                      className={`${inputClass} font-medium`}
-                      value={formData.mobile}
-                      onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
-                      placeholder="e.g. 9845012345"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* 2. Patient ID */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className={labelClass}>Patient ID</label>
-                    <span className="text-[10px] text-teal-700 bg-teal-50 px-1.5 py-0.5 rounded font-medium">Manual Entry</span>
-                  </div>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.patient_id}
-                    onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
-                    placeholder="e.g. PAT000108"
-                  />
-                </div>
-
-                {/* 3. Salutation */}
-                <div>
-                  <label className={labelClass}>Salutation</label>
-                  <AddableSelect
-                    field="patient_salutation"
-                    className={selectClass}
-                    options={salutations}
-                    value={formData.salutation}
-                    onChange={(value) => setFormData({ ...formData, salutation: value })}
-                  />
-                </div>
-
-                {/* 4. First Name */}
-                <div>
-                  <label className={labelClass}>
-                    First Name <span className="text-red-500 font-bold">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.first_name}
-                    onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                    required
-                    placeholder="First name"
-                  />
-                </div>
-
-                {/* 5. Parent / Spouse Name */}
-                <div>
-                  <label className={labelClass}>Parent / Spouse Name</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.last_name}
-                    onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-                    placeholder="Parent / Spouse name"
-                  />
-                </div>
-
-                {/* 6. Middle Name */}
-                <div>
-                  <label className={labelClass}>Middle Name</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.middle_name}
-                    onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })}
-                    placeholder="Middle name"
-                  />
-                </div>
-
-                {/* 7. Date of Birth */}
-                <div>
-                  <label className={labelClass}>Date of Birth</label>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      className={`${inputClass} pr-10`}
-                      value={formData.dob}
-                      onChange={(e) => handleDobChange(e.target.value)}
-                    />
-                    <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                  {formData.dob && formData.age && (
-                    <p className="mt-1 text-xs text-teal-600 font-medium">
-                      Age: {formData.age} {formData.age_unit || 'Years'}
+                    </div>
+                  ))}
+                  {selectedScans.length === 0 && (
+                    <p className="mt-2 text-xs text-rose-600 font-medium bg-rose-50 border border-rose-200 rounded-lg p-2 flex items-center gap-1.5">
+                      ⚠️ Select at least one scan to update patient
                     </p>
                   )}
                 </div>
+              </div>
 
-                {/* 8. Age & Unit */}
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelClass}>Age</label>
-                    <input
-                      type="number"
-                      className={inputClass}
-                      value={formData.age}
-                      onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                      placeholder="Age"
-                    />
-                  </div>
-                  <div>
-                    <label className={labelClass}>Unit</label>
-                    <select
-                      className={selectClass}
-                      value={formData.age_unit || 'Years'}
-                      onChange={(e) => {
-                        const newUnit = e.target.value
-                        const newAge = formData.dob ? calculateAgeForUnit(formData.dob, newUnit) : formData.age
-                        setFormData({ ...formData, age_unit: newUnit, age: newAge })
-                      }}
-                    >
-                      <option value="Years">Years</option>
-                      <option value="Months">Months</option>
-                      <option value="Days">Days</option>
-                    </select>
-                  </div>
-                </div>
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={handleAddVisit}
+                  className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm text-sm"
+                >
+                  <Plus className="w-4 h-4" /> Add New Visit
+                </button>
 
-                {/* 9. Gender */}
-                <div>
-                  <label className={labelClass}>Gender</label>
-                  <div className="flex items-center gap-3 mt-2">
-                    {[
-                      { id: 'M', label: 'M (Male)' },
-                      { id: 'F', label: 'F (Female)' },
-                      { id: 'UA', label: 'UA (Other)' },
-                    ].map((g) => (
-                      <label key={g.id} className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-slate-700">
-                        <input
-                          type="radio"
-                          name="gender"
-                          value={g.id}
-                          checked={formData.gender === g.id}
-                          onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                          className="w-4 h-4 text-teal-600 focus:ring-teal-500"
-                        />
-                        <span>{g.label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsReferralModalOpen(true)}
+                  title="Click to manage referral doctors and hospitals"
+                  className="w-full px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition flex items-center justify-center gap-2 font-medium text-sm"
+                >
+                  <User className="w-4 h-4" /> Referral Doctor
+                </button>
 
-                {/* 10. Marital Status */}
-                <div>
-                  <label className={labelClass}>Marital Status</label>
-                  <AddableSelect
-                    field="patient_marital_status"
-                    className={selectClass}
-                    options={maritalStatuses}
-                    value={formData.marital_status}
-                    onChange={(value) => setFormData({ ...formData, marital_status: value })}
-                  />
-                </div>
-
-                {/* 11. Ethnic Origin */}
-                <div>
-                  <label className={labelClass}>Ethnic Origin</label>
-                  <AddableSelect
-                    field="patient_ethnic_origin"
-                    className={selectClass}
-                    options={ethnicOrigins}
-                    value={formData.ethnic_origin}
-                    onChange={(value) => setFormData({ ...formData, ethnic_origin: value })}
-                  />
+                <div className="pt-2 border-t border-slate-200">
+                  <button
+                    type="submit"
+                    value="reporting"
+                    disabled={selectedScans.length === 0}
+                    title={selectedScans.length === 0 ? "Please select at least one scan type first" : "Go to Scan"}
+                    className={`w-full px-4 py-3 rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm text-sm ${
+                      selectedScans.length === 0
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                        : 'bg-slate-800 hover:bg-slate-900 text-white'
+                    }`}
+                  >
+                    <Activity className="w-4 h-4" /> Go to Scan
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 2. Address Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-white">
-              <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-blue-600" /> Address Information
-              </h2>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="lg:col-span-2">
-                  <label className={labelClass}>Street Address</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.street}
-                    onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-                    placeholder="Door / Building / Street address"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Taluk</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.taluk}
-                    onChange={(e) => setFormData({ ...formData, taluk: e.target.value })}
-                    placeholder="Auto-filled by zip code"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Area</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.area}
-                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
-                    placeholder="Area / Locality"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Area (P.O.)</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      className={inputClass}
-                      value={formData.area_po}
-                      onChange={(e) => setFormData({ ...formData, area_po: e.target.value })}
-                      placeholder="Auto-filled by zip code"
-                    />
-                    <button
-                      type="button"
-                      className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition text-xs font-medium whitespace-nowrap"
-                    >
-                      Add / Modify
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className={labelClass}>Zip / Pincode</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.zip_code}
-                    onChange={(e) => handleZipChange(e.target.value)}
-                    maxLength={10}
-                    placeholder="Enter zip / pincode"
-                  />
-                  {zipLookupStatus === 'found' && <p className="mt-1 text-xs text-teal-600 font-medium">✓ Taluk &amp; Post auto-filled</p>}
-                  {zipLookupStatus === 'notfound' && <p className="mt-1 text-xs text-amber-500 font-medium">Pincode not in database — fill manually</p>}
-                </div>
-                <div>
-                  <label className={labelClass}>Country</label>
-                  <AddableSelect
-                    field="patient_country"
-                    className={selectClass}
-                    options={countries}
-                    value={formData.country}
-                    onChange={handleCountryChange}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>State</label>
-                  <AddableSelect
-                    field="patient_state"
-                    className={selectClass}
-                    options={availableStates}
-                    value={formData.state}
-                    onChange={handleStateChange}
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>District / City</label>
-                  <AddableSelect
-                    field="patient_district_city"
-                    className={selectClass}
-                    options={availableCities}
-                    value={formData.district_city}
-                    onChange={(value) => setFormData({ ...formData, district_city: value })}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Contact & Referral Details */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-gradient-to-r from-purple-50 to-white">
-              <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                <Phone className="w-4 h-4 text-purple-600" /> Contact &amp; Referral Details
-              </h2>
-            </div>
-            <div className="p-4 sm:p-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div>
-                  <label className={labelClass}>Phone #1</label>
-                  <input
-                    type="tel"
-                    className={inputClass}
-                    value={formData.phone1}
-                    onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
-                    placeholder="Primary landline / phone"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Phone #2</label>
-                  <input
-                    type="tel"
-                    className={inputClass}
-                    value={formData.phone2}
-                    onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
-                    placeholder="Alternate phone"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Fax #</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.fax}
-                    onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
-                    placeholder="Fax number"
-                  />
-                </div>
-                <div>
-                  <label className={labelClass}>Email Address</label>
-                  <div className="relative">
-                    <input
-                      type="email"
-                      className={`${inputClass} pl-10`}
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="patient@example.com"
-                    />
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelClass}>Aadhaar / National ID</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    value={formData.aadhaar_no}
-                    onChange={(e) => setFormData({ ...formData, aadhaar_no: e.target.value })}
-                    placeholder="XXXX XXXX XXXX"
-                  />
-                </div>
-
-                {/* Referral Doctor / Institution column with + New Referral Doctor button right beside it */}
-                <div className="md:col-span-2 lg:col-span-3">
-                  <label className={labelClass}>Referral Doctor / Institution</label>
-                  <div className="flex gap-2">
-                    <div className="relative flex-1">
-                      <input
-                        list="referral-doctors-list-edit"
-                        type="text"
-                        className={inputClass}
-                        value={formData.family_doctor}
-                        onChange={(e) => setFormData({ ...formData, family_doctor: e.target.value })}
-                        placeholder="Type doctor or institution name, or choose from dropdown"
-                      />
-                      <datalist id="referral-doctors-list-edit">
-                        {referralDoctorsList.map((doc) => {
-                          const name =
-                            doc.doctor_type === 'hospital'
-                              ? doc.institution_name
-                              : `${doc.first_name || ''} ${doc.last_name || ''}`.trim() || doc.name
-                          return <option key={doc.id} value={name} />
-                        })}
-                      </datalist>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsReferralModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 rounded-lg transition text-xs font-semibold whitespace-nowrap shadow-xs shrink-0"
-                    >
-                      <UserPlus className="w-4 h-4 text-teal-600" />
-                      <span>New Referral Doctor</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 4. Visits & Scan Details */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-gradient-to-r from-teal-50/70 to-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-teal-100 flex items-center justify-center text-teal-700">
-                  <Calendar className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-base font-semibold text-slate-900">Visits &amp; Scan Registration</h2>
-                  <p className="text-xs text-slate-500">Record visit date, scan type, template, and referral details</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleAddVisit}
-                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white rounded-lg transition text-xs font-semibold shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add New Visit</span>
-              </button>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider w-12">
-                      No.
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[190px]">
-                      Visit Date
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[170px]">
-                      Scan Type
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[190px]">
-                      Report Template
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[200px]">
-                      Referral Doctor
-                    </th>
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider min-w-[220px]">
-                      Notes
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-600 uppercase tracking-wider w-16">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {visits.length === 0 ? (
-                    <tr>
-                      <td colSpan="7" className="px-4 py-8 text-center text-sm text-slate-500">
-                        No visits recorded. Click &quot;Add New Visit&quot; to add a visit.
-                      </td>
-                    </tr>
-                  ) : (
-                    visits.map((visit, index) => (
-                      <tr key={visit.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-3 py-2.5 text-center text-xs font-bold text-slate-500">
-                          {index + 1}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <input
-                            type="datetime-local"
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                            value={visit.visit_date?.slice(0, 16)}
-                            onChange={(e) => handleUpdateVisit(visit.id, 'visit_date', e.target.value)}
-                          />
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <select
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none font-medium"
-                            value={visit.scan_type || 'Adult Echo'}
-                            onChange={(e) => handleUpdateVisit(visit.id, 'scan_type', e.target.value)}
-                          >
-                            <option value="Adult Echo">Adult Echo</option>
-                            <option value="Fetal Echo">Fetal Echo</option>
-                            <option value="Pediatric Echo">Pediatric Echo</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <select
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                            value={visit.report_template || 'Standard Echo Report'}
-                            onChange={(e) => handleUpdateVisit(visit.id, 'report_template', e.target.value)}
-                          >
-                            <option value="Standard Echo Report">Standard Echo Report</option>
-                            <option value="Comprehensive Echo">Comprehensive Echo</option>
-                            <option value="Pediatric Cardiology">Pediatric Cardiology</option>
-                            <option value="Fetal Assessment">Fetal Assessment</option>
-                            <option value="Default Template">Default Template</option>
-                          </select>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <input
-                            list="referral-doctors-list-edit"
-                            type="text"
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                            value={visit.referral_doctor}
-                            onChange={(e) => handleUpdateVisit(visit.id, 'referral_doctor', e.target.value)}
-                            placeholder="Doctor / Hospital"
-                          />
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <input
-                            type="text"
-                            className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs text-slate-800 bg-white focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none"
-                            value={visit.notes}
-                            onChange={(e) => handleUpdateVisit(visit.id, 'notes', e.target.value)}
-                            placeholder="Clinical notes / indication"
-                          />
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteVisit(visit.id)}
-                            disabled={visits.length <= 1}
-                            title={visits.length <= 1 ? 'At least one visit is required' : 'Remove visit'}
-                            className="p-1.5 text-slate-400 hover:text-red-600 disabled:opacity-25 disabled:cursor-not-allowed transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* 5. Bottom Action Bar (Cancel, Save, Save & Next) */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200/90 p-4 sm:px-6 sm:py-4">
+          {/* Bottom Action Buttons Bar */}
+          <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200/90 p-3.5 sm:px-6 sm:py-4">
             {submitError && (
               <p
                 role="alert"
@@ -953,43 +1090,52 @@ function EditPatient() {
                 {submitError}
               </p>
             )}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              {/* Cancel Button */}
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => navigate('/patients')}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-all focus:outline-none focus:ring-2 focus:ring-slate-400/30"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30"
               >
                 <X className="w-4 h-4 text-slate-500" />
                 <span>Cancel</span>
               </button>
 
-              {/* Action Buttons: Save & Save and Next */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2.5">
                 <button
-                  type="submit"
-                  value="save"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl border border-teal-600 bg-white text-teal-700 hover:bg-teal-50 active:bg-teal-100 text-sm font-semibold shadow-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:border-teal-500 hover:bg-teal-50/60 hover:text-teal-800 active:bg-teal-100/60 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                 >
-                  <Save className="w-4 h-4 text-teal-600" />
-                  <span>Update Patient</span>
+                  <Printer className="w-4 h-4 text-slate-500" />
+                  <span>Preview</span>
                 </button>
 
                 <button
                   type="submit"
-                  value="next"
                   disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-sm hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500"
+                >
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 text-teal-700" />
+                  )}
+                  <span>Save</span>
+                </button>
+
+                <button
+                  type="submit"
+                  value="reporting"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
                 >
                   {isSubmitting ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <>
-                      <span>Save &amp; Next</span>
-                      <ArrowRight className="w-4 h-4 text-white" />
-                    </>
+                    <Save className="w-4 h-4 text-white" />
                   )}
+                  <span>Save & Next</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
                 </button>
               </div>
             </div>
@@ -1001,14 +1147,15 @@ function EditPatient() {
       <ReferralDoctorModal
         open={isReferralModalOpen}
         onClose={() => setIsReferralModalOpen(false)}
-        onSelect={(record) => {
-          const docName =
-            record.doctor_type === 'hospital'
-              ? record.institution_name || record.name
-              : `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.name
-          setFormData((prev) => ({ ...prev, family_doctor: docName }))
-          loadReferralDoctors()
-        }}
+        onSelect={(record) =>
+          setFormData({
+            ...formData,
+            family_doctor:
+              record.doctor_type === 'hospital'
+                ? record.institution_name
+                : `${record.first_name || ''} ${record.last_name || ''}`.trim(),
+          })
+        }
       />
     </>
   )
