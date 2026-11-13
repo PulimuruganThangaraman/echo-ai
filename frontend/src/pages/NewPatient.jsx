@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Save,
@@ -71,6 +71,16 @@ function NewPatient() {
   const [submitError, setSubmitError] = useState('')
   const [isReferralModalOpen, setIsReferralModalOpen] = useState(false)
   const [zipLookupStatus, setZipLookupStatus] = useState('')
+  const [showVisitLinkedMsg, setShowVisitLinkedMsg] = useState(false)
+  const visitLinkedMsgTimerRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (visitLinkedMsgTimerRef.current) {
+        clearTimeout(visitLinkedMsgTimerRef.current)
+      }
+    }
+  }, [])
 
   const getInitialVisitDate = () => {
     const now = new Date()
@@ -173,12 +183,12 @@ function NewPatient() {
   }
 
   const handleAddVisitDirect = () => {
-    if (!newVisitInput.visit_date) return
+    const visitDate = newVisitInput.visit_date || getInitialVisitDate()
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
     const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || 'Adult Echo'
     const newEntry = {
       id: Date.now(),
-      visit_date: newVisitInput.visit_date,
+      visit_date: visitDate,
       scan_type: entryScanType,
       report_template_id: newVisitInput.report_template_id,
       referral_doctor: formData.family_doctor || '',
@@ -193,6 +203,15 @@ function NewPatient() {
       ...prev,
       notes: '',
     }))
+
+    // Show confirmation message for 3.5s only when a visit is added
+    if (visitLinkedMsgTimerRef.current) {
+      clearTimeout(visitLinkedMsgTimerRef.current)
+    }
+    setShowVisitLinkedMsg(true)
+    visitLinkedMsgTimerRef.current = setTimeout(() => {
+      setShowVisitLinkedMsg(false)
+    }, 3500)
   }
 
   const handleAddVisit = () => {
@@ -449,16 +468,21 @@ function NewPatient() {
                   </div>
                 </div>
 
-                {/* Banner: Linked patient */}
-                <div className="flex items-center gap-3 border-b border-teal-200/70 bg-teal-50/70 px-4 py-2.5 text-sm text-teal-900">
-                  <UserCheck className="h-4 w-4 text-teal-600 shrink-0" />
-                  <span>
-                    New visits will be linked to{' '}
-                    <strong>
-                      {formData.patient_id || 'PATIENT'} — {formData.first_name || 'sample'} {formData.last_name || 'patient'}
-                    </strong>
-                  </span>
-                </div>
+                {/* Banner: Linked patient (shown only for 2-5 sec when a visit is added) */}
+                {showVisitLinkedMsg && (
+                  <div className="flex items-center gap-3 border-b border-teal-200/70 bg-teal-50/70 px-4 py-2.5 text-sm text-teal-900 transition-all">
+                    <UserCheck className="h-4 w-4 text-teal-600 shrink-0" />
+                    <span>
+                      New visit linked to{' '}
+                      <strong>
+                        {formData.patient_id || 'PATIENT'}
+                        {(formData.first_name || formData.last_name)
+                          ? ` — ${[formData.first_name, formData.last_name].filter(Boolean).join(' ')}`
+                          : ' — sample patient'}
+                      </strong>
+                    </span>
+                  </div>
+                )}
 
                 {/* Form Row: Visit date and time, Scan type, Report template, Visit notes, Add visit button */}
                 <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-[190px_160px_1fr_1fr_auto] items-end">
@@ -636,7 +660,7 @@ function NewPatient() {
               </div>
 
           {/* Bottom Action Buttons */}
-          <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200/90 p-3.5 sm:px-6 sm:py-4">
+          <div className="pt-2 pb-6 px-1">
             {submitError && (
               <p role="alert" className="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-medium text-red-700 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
