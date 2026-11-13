@@ -213,6 +213,8 @@ def init_db():
             diagnosis TEXT,
             notes TEXT,
             referral_doctor TEXT,
+            scan_type TEXT,
+            report_template TEXT,
             image_count INTEGER DEFAULT 0,
             avi INTEGER DEFAULT 0,
             pregnancy INTEGER DEFAULT 0,
@@ -222,6 +224,17 @@ def init_db():
             FOREIGN KEY (patient_id) REFERENCES patients(id)
         )
     ''')
+
+    visit_columns = {
+        'scan_type': 'TEXT',
+        'report_template': 'TEXT',
+    }
+    existing_visit_columns = {
+        row[1] for row in c.execute('PRAGMA table_info(visits)').fetchall()
+    }
+    for column, definition in visit_columns.items():
+        if column not in existing_visit_columns:
+            c.execute(f'ALTER TABLE visits ADD COLUMN {column} {definition}')
     
     # 3. Scans table
     c.execute('''
@@ -757,7 +770,9 @@ def add_visit(patient_id: int, data: dict):
     cursor = conn.cursor()
     
     visit_date = data.get('visit_date') or datetime.now().isoformat()
-    visit_type = data.get('visit_type', 'Consultation')
+    scan_type = data.get('scan_type') or data.get('visit_type', 'Adult Echo')
+    visit_type = scan_type
+    report_template = data.get('report_template', 'Standard Echo Report')
     doctor_id = data.get('doctor_id')
     diagnosis = data.get('diagnosis', '')
     notes = data.get('notes', '')
@@ -768,9 +783,9 @@ def add_visit(patient_id: int, data: dict):
     ob = data.get('ob', '')
     
     cursor.execute('''
-        INSERT INTO visits (patient_id, visit_date, visit_type, doctor_id, diagnosis, notes, referral_doctor, image_count, avi, pregnancy, ob)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (patient_id, visit_date, visit_type, doctor_id, diagnosis, notes, referral_doctor, image_count, avi, pregnancy, ob))
+        INSERT INTO visits (patient_id, visit_date, visit_type, doctor_id, diagnosis, notes, referral_doctor, scan_type, report_template, image_count, avi, pregnancy, ob)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (patient_id, visit_date, visit_type, doctor_id, diagnosis, notes, referral_doctor, scan_type, report_template, image_count, avi, pregnancy, ob))
     
     visit_id = cursor.lastrowid
     conn.commit()
@@ -783,14 +798,18 @@ def update_visit(patient_id: int, visit_id: int, data: dict):
     conn = get_db()
     cursor = conn.cursor()
     
+    scan_type = data.get('scan_type') or data.get('visit_type', 'Adult Echo')
+    report_template = data.get('report_template', 'Standard Echo Report')
+    
     cursor.execute('''
         UPDATE visits SET
             visit_date = ?, visit_type = ?, doctor_id = ?, diagnosis = ?, notes = ?,
-            referral_doctor = ?, image_count = ?, avi = ?, pregnancy = ?, ob = ?, updated_at = CURRENT_TIMESTAMP
+            referral_doctor = ?, scan_type = ?, report_template = ?, image_count = ?, avi = ?, pregnancy = ?, ob = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ? AND patient_id = ?
     ''', (
-        data.get('visit_date'), data.get('visit_type'), data.get('doctor_id'),
+        data.get('visit_date'), scan_type, data.get('doctor_id'),
         data.get('diagnosis'), data.get('notes'), data.get('referral_doctor'),
+        scan_type, report_template,
         data.get('image_count', 0), data.get('avi', 0), data.get('pregnancy', 0),
         data.get('ob', ''), visit_id, patient_id
     ))
