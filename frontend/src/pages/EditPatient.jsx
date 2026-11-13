@@ -647,25 +647,7 @@ function EditPatient() {
                 <div className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className={labelClass}>Phone #1</label>
-                      <input
-                        type="tel"
-                        className={inputClass}
-                        value={formData.phone1}
-                        onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Phone #2</label>
-                      <input
-                        type="tel"
-                        className={inputClass}
-                        value={formData.phone2}
-                        onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Mobile #</label>
+                      <label className={labelClass}>Mobile</label>
                       <div className="flex gap-1">
                         {dialCode && (
                           <span className="flex items-center px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 whitespace-nowrap select-none">
@@ -682,12 +664,33 @@ function EditPatient() {
                       </div>
                     </div>
                     <div>
-                      <label className={labelClass}>Fax #</label>
+                      <label className={labelClass}>Phone 1</label>
+                      <input
+                        type="tel"
+                        className={inputClass}
+                        value={formData.phone1}
+                        onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
+                        placeholder="Phone 1"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Phone 2</label>
+                      <input
+                        type="tel"
+                        className={inputClass}
+                        value={formData.phone2}
+                        onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
+                        placeholder="Phone 2"
+                      />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Fax</label>
                       <input
                         type="text"
                         className={inputClass}
                         value={formData.fax}
                         onChange={(e) => setFormData({ ...formData, fax: e.target.value })}
+                        placeholder="Fax"
                       />
                     </div>
                     <div className="lg:col-span-2">

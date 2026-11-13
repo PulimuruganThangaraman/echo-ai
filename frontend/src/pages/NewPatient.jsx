@@ -66,7 +66,6 @@ function NewPatient() {
   })
 
   const [visits, setVisits] = useState([])
-  const [selectedScans, setSelectedScans] = useState([])
   const [templates, setTemplates] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
@@ -133,10 +132,6 @@ function NewPatient() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (selectedScans.length === 0) {
-      setSubmitError('Please select at least one scan type (Adult Echo, Fetal Echo, or Pediatric Echo) from the List of Scans before saving.')
-      return
-    }
     const shouldGoToReport = e.nativeEvent.submitter?.value === 'reporting'
     setSubmitError('')
     setIsSubmitting(true)
@@ -149,11 +144,26 @@ function NewPatient() {
         const result = await patientService.addVisit(patient.id, visitPayload)
         createdVisits.push(result.data)
       }
-      for (const scanType of selectedScans) {
-        await scanService.createScan({ patient_id: patient.id, patient_display_id: patient.patient_id, visit_id: createdVisits[0]?.id || '', scan_type: scanType, status: 'draft' })
+
+      // Collect scan types from added visits or default to Adult Echo
+      const visitScanTypes = Array.from(new Set(visits.map(v => v.scan_type).filter(Boolean)))
+      const effectiveScans = visitScanTypes.length > 0 ? visitScanTypes : ['Adult Echo']
+
+      for (const scanType of effectiveScans) {
+        await scanService.createScan({
+          patient_id: patient.id,
+          patient_display_id: patient.patient_id,
+          visit_id: createdVisits[0]?.id || '',
+          scan_type: scanType,
+          status: 'draft',
+        })
       }
-      if (shouldGoToReport && selectedScans.length) navigate(`/echo-studies?patient=${patient.id}&visit=${createdVisits[0]?.id || ''}&type=${encodeURIComponent(selectedScans[0])}`)
-      else navigate('/search')
+
+      if (shouldGoToReport) {
+        navigate(`/echo-studies?patient=${patient.id}&visit=${createdVisits[0]?.id || ''}&type=${encodeURIComponent(effectiveScans[0] || 'Adult Echo')}`)
+      } else {
+        navigate('/search')
+      }
     } catch (error) {
       console.error('Error creating patient:', error)
       setSubmitError(error.response?.data?.detail || 'Unable to create the patient. Please check the required fields and try again.')
@@ -165,7 +175,7 @@ function NewPatient() {
   const handleAddVisitDirect = () => {
     if (!newVisitInput.visit_date) return
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
-    const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || selectedScans[0] || 'Adult Echo'
+    const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || 'Adult Echo'
     const newEntry = {
       id: Date.now(),
       visit_date: newVisitInput.visit_date,
@@ -179,9 +189,6 @@ function NewPatient() {
       ob: '',
     }
     setVisits((prev) => [...prev, newEntry])
-    if (entryScanType && !selectedScans.includes(entryScanType)) {
-      setSelectedScans((prev) => [...prev, entryScanType])
-    }
     setNewVisitInput((prev) => ({
       ...prev,
       notes: '',
@@ -194,7 +201,6 @@ function NewPatient() {
 
   const handleUpdateVisit = (id, field, value) => setVisits(visits.map(v => v.id === id ? { ...v, [field]: value } : v))
   const handleDeleteVisit = (id) => setVisits(visits.filter(v => v.id !== id))
-  const toggleScan = (scanType) => setSelectedScans(prev => prev.includes(scanType) ? prev.filter(s => s !== scanType) : [...prev, scanType])
 
   const inputClass = "w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition"
   const selectClass = "w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition appearance-none bg-white"
@@ -204,11 +210,8 @@ function NewPatient() {
   return (
     <>
       <form onSubmit={handleSubmit} className="h-full overflow-auto bg-gradient-to-br from-slate-50 to-slate-100 p-2 lg:p-3">
-        <div className="w-full">
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-            {/* Main Form */}
-            <div className="xl:col-span-3 space-y-6">
-              {/* Basic Information */}
+        <div className="w-full space-y-6">
+          {/* Basic Information */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
                   <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
@@ -362,28 +365,28 @@ function NewPatient() {
                 <div className="p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className={labelClass}>Phone #1</label>
-                      <input type="tel" className={inputClass} value={formData.phone1} onChange={(e) => setFormData({ ...formData, phone1: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Phone #2</label>
-                      <input type="tel" className={inputClass} value={formData.phone2} onChange={(e) => setFormData({ ...formData, phone2: e.target.value })} />
-                    </div>
-                    <div>
-                      <label className={labelClass}>Mobile #</label>
+                      <label className={labelClass}>Mobile</label>
                       <div className="flex gap-1">
                         {dialCode && <span className="flex items-center px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 text-sm font-semibold text-slate-700 whitespace-nowrap select-none">{dialCode}</span>}
                         <input type="tel" className={`${inputClass} flex-1`} value={formData.mobile} onChange={(e) => setFormData({ ...formData, mobile: e.target.value })} placeholder="Mobile number" />
                       </div>
                     </div>
                     <div>
-                      <label className={labelClass}>Fax #</label>
-                      <input type="text" className={inputClass} value={formData.fax} onChange={(e) => setFormData({ ...formData, fax: e.target.value })} />
+                      <label className={labelClass}>Phone 1</label>
+                      <input type="tel" className={inputClass} value={formData.phone1} onChange={(e) => setFormData({ ...formData, phone1: e.target.value })} placeholder="Phone 1" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Phone 2</label>
+                      <input type="tel" className={inputClass} value={formData.phone2} onChange={(e) => setFormData({ ...formData, phone2: e.target.value })} placeholder="Phone 2" />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Fax</label>
+                      <input type="text" className={inputClass} value={formData.fax} onChange={(e) => setFormData({ ...formData, fax: e.target.value })} placeholder="Fax" />
                     </div>
                     <div className="md:col-span-2">
                       <label className={labelClass}>Email</label>
                       <div className="relative">
-                        <input type="email" className={`${inputClass} pl-10`} value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                        <input type="email" className={`${inputClass} pl-10`} value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="Email address" />
                         <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       </div>
                     </div>
@@ -606,7 +609,7 @@ function NewPatient() {
                               <td className="px-4 py-3 text-slate-700">{displayDate}</td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                                  {visit.scan_type || selectedScans[0] || 'Adult Echo'}
+                                  {visit.scan_type || 'Adult Echo'}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-slate-700">
@@ -631,72 +634,6 @@ function NewPatient() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            {/* Right Sidebar */}
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-rose-50 to-white flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-rose-600" /> List of Scans *
-                  </h2>
-                  {selectedScans.length === 0 ? (
-                    <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                      Required
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      ✓ {selectedScans.length} Selected
-                    </span>
-                  )}
-                </div>
-                <div className="p-3 space-y-2">
-                  {['Adult Echo', 'Fetal Echo', 'Pediatric Echo'].map(scanType => (
-                    <div key={scanType} role="button" tabIndex={0}
-                      onDoubleClick={(event) => { event.preventDefault(); navigate(`/echo-studies?type=${encodeURIComponent(scanType)}`) }}
-                      onKeyDown={(event) => { if (event.key === 'Enter') navigate(`/echo-studies?type=${encodeURIComponent(scanType)}`) }}
-                      title={`Double-click to open ${scanType}`}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50 group">
-                      <input type="checkbox" checked={selectedScans.includes(scanType)} onChange={() => toggleScan(scanType)} className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500" />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm text-slate-700 group-hover:text-teal-700 font-medium">{scanType}</span>
-                        <span className="block text-[11px] text-slate-400">Double-click to open</span>
-                      </span>
-                    </div>
-                  ))}
-                  {selectedScans.length === 0 && (
-                    <p className="mt-2 text-xs text-rose-600 font-medium bg-rose-50 border border-rose-200 rounded-lg p-2 flex items-center gap-1.5">
-                      ⚠️ Select at least one scan to register patient
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <button type="button" onClick={handleAddVisit} className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm">
-                  <Plus className="w-4 h-4" /> Add New Visit
-                </button>
-                <button type="button" onClick={() => setIsReferralModalOpen(true)} title="Click to manage referral doctors and hospitals" className="w-full px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition flex items-center justify-center gap-2 font-medium">
-                  <User className="w-4 h-4" /> New Referral Doctor
-                </button>
-                <div className="pt-4 border-t border-slate-200">
-                  <button
-                    type="submit"
-                    value="reporting"
-                    disabled={selectedScans.length === 0}
-                    title={selectedScans.length === 0 ? "Please select at least one scan type first" : "Go to Scan"}
-                    className={`w-full px-4 py-3 rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm ${
-                      selectedScans.length === 0
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                        : 'bg-slate-800 hover:bg-slate-900 text-white'
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" /> Go to Scan
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Bottom Action Buttons */}
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200/90 p-3.5 sm:px-6 sm:py-4">
