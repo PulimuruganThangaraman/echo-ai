@@ -19,6 +19,7 @@ import {
   UserCheck,
   Stethoscope,
   FileText,
+  AlertCircle,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
@@ -78,6 +79,8 @@ function EditPatient() {
     area_po: '',
   })
 
+  const [formErrors, setFormErrors] = useState({})
+  const [visitFormError, setVisitFormError] = useState('')
   const [visits, setVisits] = useState([])
   const [selectedScans, setSelectedScans] = useState([])
   const [templates, setTemplates] = useState([])
@@ -233,6 +236,47 @@ function EditPatient() {
     }
   }, [id])
 
+  const updateFormField = (field, value) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    if (formErrors[field]) {
+      setFormErrors((prev) => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+    if (visitFormError) setVisitFormError('')
+  }
+
+  const clearFieldError = (field) => {
+    if (formErrors[field]) {
+      setFormErrors((prev) => {
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }
+    if (visitFormError) setVisitFormError('')
+  }
+
+  const validatePatientInfo = () => {
+    const errors = {}
+    if (!formData.patient_id?.trim()) errors.patient_id = 'Patient ID is required'
+    if (!formData.first_name?.trim()) errors.first_name = 'First Name is required'
+    if (!formData.last_name?.trim()) errors.last_name = 'Parent / Spouse Name is required'
+    if (!formData.dob?.trim()) errors.dob = 'Date of Birth is required'
+    if (!formData.gender?.trim()) errors.gender = 'Gender is required'
+    if (!formData.street?.trim()) errors.street = 'Street Address is required'
+    if (!formData.country?.trim()) errors.country = 'Country is required'
+    if (!formData.state?.trim()) errors.state = 'State is required'
+    if (!formData.mobile?.trim() && !formData.phone1?.trim()) {
+      errors.mobile = 'Mobile number (Primary phone) is required'
+    }
+
+    setFormErrors(errors)
+    return errors
+  }
+
   const handleDobChange = useCallback((dob) => {
     const calculated = calculateAgeWithUnit(dob)
     setFormData((prev) => ({
@@ -241,22 +285,23 @@ function EditPatient() {
       age: calculated.age,
       age_unit: calculated.unit || prev.age_unit || 'Years'
     }))
+    clearFieldError('dob')
   }, [])
 
   const handleCountryChange = useCallback((country) => {
-    const code = getDialCode(country)
     setFormData((prev) => ({
       ...prev,
       country,
       state: '',
       district_city: '',
-      mobile: code ? code + ' ' : '',
     }))
     setZipLookupStatus('')
+    clearFieldError('country')
   }, [])
 
   const handleStateChange = useCallback((state) => {
     setFormData((prev) => ({ ...prev, state, district_city: '' }))
+    clearFieldError('state')
   }, [])
 
   const handleZipChange = useCallback((zip) => {
@@ -281,6 +326,18 @@ function EditPatient() {
   }, [])
 
   const handleAddVisitDirect = () => {
+    const errors = validatePatientInfo()
+    if (Object.keys(errors).length > 0) {
+      setVisitFormError('Please fill in all mandatory patient information before adding a visit.')
+      const firstField = Object.keys(errors)[0]
+      const el = document.getElementById(`field-${firstField}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.focus?.()
+      }
+      return
+    }
+    setVisitFormError('')
     if (!newVisitInput.visit_date) return
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
     const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || selectedScans[0] || 'Adult Echo'
@@ -331,6 +388,17 @@ function EditPatient() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const errors = validatePatientInfo()
+    if (Object.keys(errors).length > 0) {
+      setSubmitError('Please fill in all mandatory patient fields before updating.')
+      const firstField = Object.keys(errors)[0]
+      const el = document.getElementById(`field-${firstField}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.focus?.()
+      }
+      return
+    }
     if (selectedScans.length === 0) {
       setSubmitError('Please select at least one scan type (Adult Echo, Fetal Echo, or Pediatric Echo) from the List of Scans before updating.')
       return
@@ -395,6 +463,16 @@ function EditPatient() {
   const dialCode = getDialCode(formData.country)
   const patientInitials = getInitials(formData.first_name, formData.last_name)
   const fullName = `${formData.salutation || ''} ${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Patient'
+
+  const getInputClass = (field) =>
+    formErrors[field]
+      ? 'w-full px-3 py-2 border border-red-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition ring-1 ring-red-500 bg-red-50/10 text-xs sm:text-sm text-slate-800'
+      : inputClass
+
+  const getSelectClass = (field) =>
+    formErrors[field]
+      ? 'w-full px-3 py-2 pr-8 border border-red-500 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-200 focus:border-red-500 transition appearance-none bg-white ring-1 ring-red-500 text-xs sm:text-sm text-slate-800'
+      : selectClass
 
   if (loading) {
     return (
@@ -470,13 +548,16 @@ function EditPatient() {
                     <div>
                       <label className={labelClass}>Patient ID *</label>
                       <input
+                        id="field-patient_id"
                         type="text"
-                        className={inputClass}
+                        className={getInputClass('patient_id')}
                         value={formData.patient_id}
-                        onChange={(e) => setFormData({ ...formData, patient_id: e.target.value })}
-                        required
+                        onChange={(e) => updateFormField('patient_id', e.target.value)}
                         placeholder="e.g., TM00100"
                       />
+                      {formErrors.patient_id && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.patient_id}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Salutation</label>
@@ -485,27 +566,35 @@ function EditPatient() {
                         className={selectClass}
                         options={salutations}
                         value={formData.salutation}
-                        onChange={(value) => setFormData({ ...formData, salutation: value })}
+                        onChange={(value) => updateFormField('salutation', value)}
                       />
                     </div>
                     <div>
                       <label className={labelClass}>First Name *</label>
                       <input
+                        id="field-first_name"
                         type="text"
-                        className={inputClass}
+                        className={getInputClass('first_name')}
                         value={formData.first_name}
-                        onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-                        required
+                        onChange={(e) => updateFormField('first_name', e.target.value)}
                       />
+                      {formErrors.first_name && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.first_name}</p>
+                      )}
                     </div>
                     <div>
-                      <label className={labelClass}>Parent / Spouse Name</label>
+                      <label className={labelClass}>Parent / Spouse Name *</label>
                       <input
+                        id="field-last_name"
                         type="text"
-                        className={inputClass}
+                        className={getInputClass('last_name')}
                         value={formData.last_name}
-                        onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                        onChange={(e) => updateFormField('last_name', e.target.value)}
+                        placeholder="Parent / Spouse Name"
                       />
+                      {formErrors.last_name && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.last_name}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Middle Name</label>
@@ -513,20 +602,24 @@ function EditPatient() {
                         type="text"
                         className={inputClass}
                         value={formData.middle_name}
-                        onChange={(e) => setFormData({ ...formData, middle_name: e.target.value })}
+                        onChange={(e) => updateFormField('middle_name', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Date of Birth</label>
+                      <label className={labelClass}>Date of Birth *</label>
                       <div className="relative">
                         <input
+                          id="field-dob"
                           type="date"
-                          className={`${inputClass} pr-10`}
+                          className={`${getInputClass('dob')} pr-10`}
                           value={formData.dob}
                           onChange={(e) => handleDobChange(e.target.value)}
                         />
                         <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
+                      {formErrors.dob && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.dob}</p>
+                      )}
                       {formData.dob && formData.age && (
                         <p className="mt-1 text-xs text-teal-600 font-medium">
                           Age: {formData.age} {formData.age_unit || 'Years'}
@@ -540,7 +633,7 @@ function EditPatient() {
                           type="number"
                           className={inputClass}
                           value={formData.age}
-                          onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                          onChange={(e) => updateFormField('age', e.target.value)}
                           placeholder="Age"
                         />
                       </div>
@@ -562,8 +655,13 @@ function EditPatient() {
                       </div>
                     </div>
                     <div>
-                      <label className={labelClass}>Gender</label>
-                      <div className="flex items-center gap-3 mt-2">
+                      <label className={labelClass}>Gender *</label>
+                      <div
+                        id="field-gender"
+                        className={`flex items-center gap-3 mt-1.5 transition ${
+                          formErrors.gender ? 'p-1.5 rounded-lg border border-red-500 ring-1 ring-red-500 bg-red-50/40' : 'p-1.5'
+                        }`}
+                      >
                         {['M', 'F', 'UA'].map((g) => (
                           <label key={g} className="flex items-center gap-1.5 cursor-pointer">
                             <input
@@ -571,13 +669,16 @@ function EditPatient() {
                               name="gender"
                               value={g}
                               checked={formData.gender === g}
-                              onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                              onChange={(e) => updateFormField('gender', e.target.value)}
                               className="w-4 h-4 text-teal-600 focus:ring-teal-500"
                             />
                             <span className="text-sm text-slate-700 font-medium">{g}</span>
                           </label>
                         ))}
                       </div>
+                      {formErrors.gender && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.gender}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Marital Status</label>
@@ -586,9 +687,7 @@ function EditPatient() {
                         className={selectClass}
                         options={maritalStatuses}
                         value={formData.marital_status}
-                        onChange={(value) =>
-                          setFormData({ ...formData, marital_status: value })
-                        }
+                        onChange={(value) => updateFormField('marital_status', value)}
                       />
                     </div>
                     <div>
@@ -598,9 +697,7 @@ function EditPatient() {
                         className={selectClass}
                         options={ethnicOrigins}
                         value={formData.ethnic_origin}
-                        onChange={(value) =>
-                          setFormData({ ...formData, ethnic_origin: value })
-                        }
+                        onChange={(value) => updateFormField('ethnic_origin', value)}
                       />
                     </div>
                   </div>
@@ -617,14 +714,18 @@ function EditPatient() {
                 <div className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="lg:col-span-2">
-                      <label className={labelClass}>Street Address</label>
+                      <label className={labelClass}>Street Address *</label>
                       <input
+                        id="field-street"
                         type="text"
-                        className={inputClass}
+                        className={getInputClass('street')}
                         value={formData.street}
-                        onChange={(e) => setFormData({ ...formData, street: e.target.value })}
+                        onChange={(e) => updateFormField('street', e.target.value)}
                         placeholder="House / Flat No., Street Name"
                       />
+                      {formErrors.street && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.street}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Taluk</label>
@@ -632,7 +733,7 @@ function EditPatient() {
                         type="text"
                         className={inputClass}
                         value={formData.taluk}
-                        onChange={(e) => setFormData({ ...formData, taluk: e.target.value })}
+                        onChange={(e) => updateFormField('taluk', e.target.value)}
                         placeholder="Auto-filled by zip code"
                       />
                     </div>
@@ -642,7 +743,7 @@ function EditPatient() {
                         type="text"
                         className={inputClass}
                         value={formData.area}
-                        onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                        onChange={(e) => updateFormField('area', e.target.value)}
                       />
                     </div>
                     <div>
@@ -651,7 +752,7 @@ function EditPatient() {
                         type="text"
                         className={inputClass}
                         value={formData.area_po}
-                        onChange={(e) => setFormData({ ...formData, area_po: e.target.value })}
+                        onChange={(e) => updateFormField('area_po', e.target.value)}
                         placeholder="Auto-filled by zip code"
                       />
                     </div>
@@ -677,14 +778,19 @@ function EditPatient() {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Country</label>
-                      <AddableSelect
-                        field="patient_country"
-                        className={selectClass}
-                        options={countries}
-                        value={formData.country}
-                        onChange={handleCountryChange}
-                      />
+                      <label className={labelClass}>Country *</label>
+                      <div id="field-country">
+                        <AddableSelect
+                          field="patient_country"
+                          className={getSelectClass('country')}
+                          options={countries}
+                          value={formData.country}
+                          onChange={handleCountryChange}
+                        />
+                      </div>
+                      {formErrors.country && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.country}</p>
+                      )}
                       {dialCode && (
                         <p className="mt-1 text-xs text-slate-500">
                           Dial code:{' '}
@@ -693,14 +799,19 @@ function EditPatient() {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>State</label>
-                      <AddableSelect
-                        field="patient_state"
-                        className={selectClass}
-                        options={availableStates}
-                        value={formData.state}
-                        onChange={handleStateChange}
-                      />
+                      <label className={labelClass}>State *</label>
+                      <div id="field-state">
+                        <AddableSelect
+                          field="patient_state"
+                          className={getSelectClass('state')}
+                          options={availableStates}
+                          value={formData.state}
+                          onChange={handleStateChange}
+                        />
+                      </div>
+                      {formErrors.state && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.state}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>District/City</label>
@@ -709,9 +820,7 @@ function EditPatient() {
                         className={selectClass}
                         options={availableCities}
                         value={formData.district_city}
-                        onChange={(value) =>
-                          setFormData({ ...formData, district_city: value })
-                        }
+                        onChange={(value) => updateFormField('district_city', value)}
                       />
                     </div>
                   </div>
@@ -728,8 +837,8 @@ function EditPatient() {
                 <div className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className={labelClass}>Mobile</label>
-                      <div className="flex gap-1">
+                      <label className={labelClass}>Mobile * <span className="text-xs text-slate-500 font-normal">(Primary phone)</span></label>
+                      <div className="flex gap-1" id="field-mobile">
                         {dialCode && (
                           <span className="flex items-center px-2.5 py-2 rounded-lg border border-slate-300 bg-slate-50 text-xs font-semibold text-slate-700 whitespace-nowrap select-none">
                             {dialCode}
@@ -737,12 +846,15 @@ function EditPatient() {
                         )}
                         <input
                           type="tel"
-                          className={`${inputClass} flex-1`}
+                          className={`${getInputClass('mobile')} flex-1`}
                           value={formData.mobile}
-                          onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                          onChange={(e) => updateFormField('mobile', e.target.value)}
                           placeholder="Mobile number"
                         />
                       </div>
+                      {formErrors.mobile && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.mobile}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>Phone 1</label>
@@ -750,7 +862,7 @@ function EditPatient() {
                         type="tel"
                         className={inputClass}
                         value={formData.phone1}
-                        onChange={(e) => setFormData({ ...formData, phone1: e.target.value })}
+                        onChange={(e) => updateFormField('phone1', e.target.value)}
                         placeholder="Phone 1"
                       />
                     </div>
@@ -760,7 +872,7 @@ function EditPatient() {
                         type="tel"
                         className={inputClass}
                         value={formData.phone2}
-                        onChange={(e) => setFormData({ ...formData, phone2: e.target.value })}
+                        onChange={(e) => updateFormField('phone2', e.target.value)}
                         placeholder="Phone 2"
                       />
                     </div>
@@ -848,6 +960,24 @@ function EditPatient() {
                     </strong>
                   </span>
                 </div>
+
+                {/* Error Banner: Missing mandatory patient info */}
+                {visitFormError && (
+                  <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-300 rounded-lg text-sm text-red-700 flex items-center justify-between gap-3 shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-red-600 shrink-0" />
+                      <span className="font-semibold">{visitFormError}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVisitFormError('')}
+                      className="text-red-500 hover:text-red-700 p-0.5 rounded"
+                      title="Dismiss"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {/* Form Row: Visit date and time, Scan type, Report template, Referral Doctor / Institute, Visit notes, Add visit button */}
                 <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 xl:grid-cols-[180px_140px_1fr_1.3fr_1fr_auto] md:grid-cols-2 lg:grid-cols-3 grid-cols-1 items-end">
