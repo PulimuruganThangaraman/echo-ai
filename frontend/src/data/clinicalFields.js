@@ -51,4 +51,4 @@ export const fetalDoppler = [n('mvE','Mitral E','cm/s'),n('mvA','Mitral A','cm/s
 
 export const lmpFields = [t('lmp','LMP'),t('edd','EDD'),n('gaWeeks','Gestational age – weeks'),n('gaDays','Days'),s('datingMethod','Dating method',['LMP','Ultrasound','Embryo transfer']),t('etDate','Embryo transfer date'),t('btDate','Blastocyst transfer date'),s('fetuses','Number of fetuses',['Single','Twins','Triplets','Four'])]
 
-export const impressionFields = [t('reportTitle','Report title'),t('firstLine','First line of report'),t('signedByLeft','Report signed by (L)'),t('signedByRight','Report signed by (R)'),t('primaryConsultant','Primary consultant'),t('secondConsultant','Second consultant'),t('auditedBy','Audited by'),t('typedBy','Report typed by')]
+export const impressionFields = [{ key: 'reportType', label: 'Report type', type: 'select', options: ['Normal', 'Abnormal', 'Ambiguity', 'Growth abnormality'] },t('firstLine','First line of report'),t('signedByLeft','Report signed by (L)'),t('signedByRight','Report signed by (R)'),t('primaryConsultant','Primary consultant'),t('secondConsultant','Second consultant'),t('auditedBy','Audited by'),t('typedBy','Report typed by')]

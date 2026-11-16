@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, CheckCircle2, FileDown, FileText, Film, Mail, Plus, Printer, Save, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, FileDown, FileText, Mail, Plus, Printer, Save, Trash2 } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Field, FieldGrid, Section, Tabs, Workspace } from '../components/WorkspaceUI'
 import SearchableSelect from '../components/SearchableSelect'
@@ -12,14 +12,17 @@ import {
 } from '../data/clinicalFields'
 
 const tabsByType = {
-  'Adult Echo': ['Echo details', '2D measurements', 'M-Mode', 'Doppler', 'PISA', 'Aortic Stenosis', 'Impression', 'Multiframes', 'Preview'],
-  'Pediatric Echo': ['Echo details', 'Biometry', 'Doppler', 'Custom measurements', 'Impression', 'Multiframes', 'Preview'],
-  'Fetal Echo': ['LMP details', 'Echo details', 'Biometry', 'Doppler', 'Impression', 'Multiframes', 'Preview'],
+  'Adult Echo': ['Echo details', '2D measurements', 'M-Mode', 'Doppler', 'PISA', 'Aortic Stenosis', 'Impression', 'Preview'],
+  'Pediatric Echo': ['Echo details', 'Biometry', 'Doppler', 'Custom measurements', 'Impression', 'Preview'],
+  'Fetal Echo': ['LMP details', 'Echo details', 'Biometry', 'Doppler', 'Impression', 'Preview'],
 }
 
 const emptyData = (type = 'Adult Echo') => ({
   reportTitle: `${type} Report`,
   indication: '',
+  reportType: 'Normal',
+  headerComments: '',
+  impression: '',
   imageColumns: '1',
   imageWidth: '600',
   imageHeight: '450',
@@ -88,7 +91,6 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
   const [visitId, setVisitId] = useState(params.get('visit') || '')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  const [clips, setClips] = useState([])
 
   const patientOptions = useMemo(() => {
     return patients.map((item) => ({
@@ -292,7 +294,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     }))
   }
 
-  const validateReport = () => {
+  const validateReport = (checkImpression = false) => {
     const newErrors = {}
     if (!data.reportTitle || !String(data.reportTitle).trim()) {
       newErrors.reportTitle = 'Report title is required'
@@ -323,6 +325,15 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       })
     })
 
+    if (checkImpression || activeTab === 'Impression' || activeTab === 'Preview' || data.reportCompleted) {
+      if (!data.headerComments || !String(data.headerComments).trim()) {
+        newErrors.headerComments = 'Header comments are required'
+      }
+      if (!data.impression || !String(data.impression).trim()) {
+        newErrors.impression = 'Final impression is required'
+      }
+    }
+
     setErrors(newErrors)
     return {
       isValid: Object.keys(newErrors).length === 0,
@@ -330,8 +341,9 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     }
   }
 
-  const save = async () => {
-    const { isValid, errors: validationErrors } = validateReport()
+  const save = async (options = {}) => {
+    const { checkImpression = false } = options
+    const { isValid, errors: validationErrors } = validateReport(checkImpression)
     if (!isValid) {
       if ((validationErrors.lmp || validationErrors.edd) && scanType === 'Fetal Echo' && activeTab !== 'LMP details') {
         setActiveTab('LMP details')
@@ -339,6 +351,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
         const hasEchoCommentError = Object.keys(validationErrors).some((k) => k.endsWith('Comment'))
         if (hasEchoCommentError && activeTab !== 'Echo details') {
           setActiveTab('Echo details')
+        } else if ((validationErrors.headerComments || validationErrors.impression) && activeTab !== 'Impression') {
+          setActiveTab('Impression')
         }
       }
       return false
@@ -386,7 +400,6 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     }
   }
 
-  const addFiles = (event) => setClips((current) => [...current, ...[...event.target.files].map((file) => ({name:file.name,url:URL.createObjectURL(file),size:file.size}))])
   const fields = activeTab === '2D measurements' ? adult2D : activeTab === 'M-Mode' ? mMode : activeTab === 'PISA' ? pisa : activeTab === 'Aortic' || activeTab === 'Aortic Stenosis' ? aortic : activeTab === 'Biometry' ? (scanType === 'Fetal Echo' ? fetalBiometry : pediatricBiometry) : activeTab === 'Doppler' ? (scanType === 'Adult Echo' ? adultDoppler : scanType === 'Fetal Echo' ? fetalDoppler : pediatricDoppler) : []
 
   return (
@@ -561,9 +574,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       )}
 
       {activeTab === 'Custom measurements' && <CustomMeasurements data={data} setData={setData} />}
-      {activeTab === 'Impression' && <Impression data={data} setData={setData} doctors={doctors} />}
+      {activeTab === 'Impression' && <Impression data={data} setData={setData} doctors={doctors} errors={errors} setErrors={setErrors} />}
       {activeTab === 'Referral letter' && <ReferralLetter data={data} setData={setData} doctors={doctors} patient={patient} />}
-      {activeTab === 'Multiframes' && <Multiframes clips={clips} setClips={setClips} addFiles={addFiles} />}
       {activeTab === 'Preview' && <ReportPreview scanType={scanType} data={{ ...data, ...calculated }} setData={setData} patient={patient} />}
 
       <div className="mt-6 flex items-center justify-end gap-3">
@@ -723,41 +735,118 @@ function CustomMeasurements({ data, setData }) {
   )
 }
 
-function Impression({ data, setData, doctors }) {
+function Impression({ data, setData, doctors, errors = {}, setErrors }) {
   const names = doctors.map((doctor) => doctor.doctor_type === 'hospital' ? doctor.institution_name : `${doctor.first_name || ''} ${doctor.last_name || ''}`.trim()).filter(Boolean)
+
+  const currentReportType = data.reportType || (
+    data.abnormal ? 'Abnormal' :
+    data.ambiguity ? 'Ambiguity' :
+    data.growthAbnormality ? 'Growth abnormality' :
+    'Normal'
+  )
+
+  const handleDetailsDataChange = (updated) => {
+    if (updated.reportType !== (data.reportType || currentReportType)) {
+      updated.abnormal = updated.reportType === 'Abnormal'
+      updated.ambiguity = updated.reportType === 'Ambiguity'
+      updated.growthAbnormality = updated.reportType === 'Growth abnormality'
+    }
+    setData(updated)
+  }
+
+  const fields = impressionFields.map((field) => {
+    if (['signedByLeft', 'signedByRight', 'primaryConsultant', 'secondConsultant', 'auditedBy', 'typedBy'].includes(field.key)) {
+      return { ...field, type: 'select', options: names, addable: true, optionField: field.key }
+    }
+    return field
+  })
+
   return (
     <div className="space-y-4">
       <Section title="Report details">
-        <FieldGrid fields={impressionFields.map((field) => ['signedByLeft', 'signedByRight', 'primaryConsultant', 'secondConsultant', 'auditedBy', 'typedBy'].includes(field.key) ? { ...field, type: 'select', options: names, addable: true } : field)} data={data} setData={setData} />
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <Field label="Abnormal" type="checkbox" value={data.abnormal} onChange={(value) => setData({ ...data, abnormal: value })} />
-          <Field label="Ambiguity" type="checkbox" value={data.ambiguity} onChange={(value) => setData({ ...data, ambiguity: value })} />
-          <Field label="Growth abnormality" type="checkbox" value={data.growthAbnormality} onChange={(value) => setData({ ...data, growthAbnormality: value })} />
-        </div>
+        <FieldGrid
+          fields={fields}
+          data={{ ...data, reportType: currentReportType }}
+          setData={handleDetailsDataChange}
+        />
       </Section>
       <div className="grid gap-4 lg:grid-cols-2">
         <Section title="Comments">
-          <Field type="textarea" rows={5} label="Header comments" value={data.headerComments} onChange={(value) => setData({ ...data, headerComments: value })} />
+          <Field
+            type="textarea"
+            rows={5}
+            label="Header comments *"
+            value={data.headerComments}
+            onChange={(value) => {
+              setData((prev) => ({ ...prev, headerComments: value }))
+              if (value?.trim()) setErrors?.((prev) => ({ ...prev, headerComments: '' }))
+            }}
+            hasError={Boolean(errors.headerComments)}
+            error={errors.headerComments}
+          />
           <div className="mt-3">
-            <Field type="textarea" rows={5} label="Footer comments" value={data.footerComments} onChange={(value) => setData({ ...data, footerComments: value })} />
-          </div>
-          <div className="mt-3">
-            <Field type="textarea" rows={5} label="System impression" value={data.systemImpression} onChange={(value) => setData({ ...data, systemImpression: value })} />
+            <Field
+              type="textarea"
+              rows={5}
+              label="Footer comments"
+              value={data.footerComments}
+              onChange={(value) => setData((prev) => ({ ...prev, footerComments: value }))}
+            />
           </div>
         </Section>
         <Section title="Finalisation">
-          <Field type="textarea" rows={8} label="Final impression" value={data.impression} onChange={(value) => setData({ ...data, impression: value })} />
+          <Field
+            type="textarea"
+            rows={8}
+            label="Final impression *"
+            value={data.impression}
+            onChange={(value) => {
+              setData((prev) => ({ ...prev, impression: value }))
+              if (value?.trim()) setErrors?.((prev) => ({ ...prev, impression: '' }))
+            }}
+            hasError={Boolean(errors.impression)}
+            error={errors.impression}
+          />
           <div className="mt-3">
-            <Field type="textarea" rows={4} label="Recommendations" value={data.recommendations} onChange={(value) => setData({ ...data, recommendations: value })} />
+            <Field
+              type="textarea"
+              rows={4}
+              label="Recommendations"
+              value={data.recommendations}
+              onChange={(value) => setData((prev) => ({ ...prev, recommendations: value }))}
+            />
           </div>
           <div className="mt-3">
-            <Field type="textarea" rows={4} label="Disclaimer comments" value={data.disclaimer} onChange={(value) => setData({ ...data, disclaimer: value })} />
+            <Field
+              type="textarea"
+              rows={4}
+              label="Disclaimer comments"
+              value={data.disclaimer}
+              onChange={(value) => setData((prev) => ({ ...prev, disclaimer: value }))}
+            />
           </div>
           <div className="mt-3">
-            <Field type="textarea" rows={4} label="Internal comments (not printed)" value={data.internalComments} onChange={(value) => setData({ ...data, internalComments: value })} />
+            <Field
+              type="textarea"
+              rows={4}
+              label="Internal comments (not printed)"
+              value={data.internalComments}
+              onChange={(value) => setData({ ...data, internalComments: value })}
+            />
           </div>
           <div className="mt-3">
-            <Field label="Report completed" type="checkbox" value={data.reportCompleted} onChange={(value) => setData({ ...data, reportCompleted: value, investigationStatus: value ? 'Completed' : data.investigationStatus })} />
+            <Field
+              label="Report completed"
+              type="checkbox"
+              value={data.reportCompleted}
+              onChange={(value) =>
+                setData((prev) => ({
+                  ...prev,
+                  reportCompleted: value,
+                  investigationStatus: value ? 'Completed' : prev.investigationStatus,
+                }))
+              }
+            />
           </div>
         </Section>
       </div>
@@ -789,39 +878,9 @@ function ReferralLetter({ data, setData, doctors, patient }) {
   )
 }
 
-function Multiframes({ clips, setClips, addFiles }) {
-  return (
-    <Section title="Multiframe cine viewer" description="Import, play, review and remove study clips.">
-      <label className="primary-button mb-4 cursor-pointer">
-        <Upload className="h-4 w-4" />Import cine clips
-        <input type="file" accept="video/*" multiple className="hidden" onChange={addFiles} />
-      </label>
-      {clips.length ? (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {clips.map((clip, index) => (
-            <div key={`${clip.name}-${index}`} className="rounded-xl bg-slate-950 p-3">
-              <video src={clip.url} controls className="aspect-video w-full" />
-              <div className="mt-2 flex items-center justify-between text-sm text-white">
-                <span className="flex items-center gap-2"><Film className="h-4 w-4" />{clip.name}</span>
-                <button onClick={() => setClips(clips.filter((_, i) => i !== index))} className="rounded p-1 text-red-300">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex min-h-72 flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50 text-slate-500">
-          <Film className="mb-3 h-12 w-12 text-slate-300" />No multiframe clips imported.
-        </div>
-      )}
-    </Section>
-  )
-}
-
 function ReportPreview({ scanType, data, setData, patient }) {
   const options = [
-    { key: 'reportType', label: 'Report type', type: 'select', options: ['Report only', 'Report with images', 'With biometry graphs'] },
+    { key: 'reportLayout', label: 'Report layout', type: 'select', options: ['Report only', 'Report with images', 'With biometry graphs'] },
     { key: 'preprinted', label: 'Preprinted stationery', type: 'checkbox' },
     { key: 'showLogo', label: 'Logo', type: 'checkbox' },
     { key: 'showAlias', label: 'Alias ID', type: 'checkbox' },
