@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   Calendar,
   CheckCircle2,
+  FileText,
   Plus,
   Save,
   Trash2,
@@ -340,6 +341,13 @@ export default function Visits() {
       setStatus(
         `Visit added and linked to ${selectedPatientRecord.patient_id} — ${selectedPatientRecord.first_name || ''} ${selectedPatientRecord.last_name || ''}`.trim()
       )
+
+      // Navigate directly to clinical reporting workspace for this patient and new visit
+      navigate(
+        `/echo-studies?patient=${selectedPatient}&visit=${newVisit.id}&type=${encodeURIComponent(
+          determinedScanType
+        )}`
+      )
     } catch (error) {
       alert(error.response?.data?.detail || 'Unable to add visit')
     } finally {
@@ -611,10 +619,11 @@ export default function Visits() {
           <button
             type="submit"
             disabled={!patient || saving || !visitData.visit_date}
-            className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition shrink-0 disabled:cursor-not-allowed disabled:opacity-40"
+            title="Add visit and open reporting workspace"
+            className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <Save className="h-4 w-4" />
-            {saving ? 'Saving…' : 'Add visit'}
+            <FileText className="h-4 w-4" />
+            {saving ? 'Opening report…' : 'Add and go to report'}
           </button>
         </form>
 
