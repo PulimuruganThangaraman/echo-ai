@@ -587,11 +587,7 @@ function FindingGrid({ fields, data, setData, errors = {}, setErrors }) {
         return (
           <div
             key={field.key}
-            className={`grid gap-2 rounded-lg border p-3 sm:grid-cols-2 transition-colors ${
-              isAbnormal
-                ? 'border-amber-300 bg-amber-50/40 shadow-xs'
-                : 'border-slate-100 bg-slate-50'
-            }`}
+            className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3 sm:grid-cols-2"
           >
             <Field
               label={field.label}
