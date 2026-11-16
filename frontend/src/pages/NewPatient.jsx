@@ -60,6 +60,7 @@ function NewPatient() {
     mobile: '',
     fax: '',
     aadhaar_no: '',
+    abha_no: '',
     family_doctor: '',
     taluk: '',
     area: '',
@@ -92,6 +93,7 @@ function NewPatient() {
     visit_date: getInitialVisitDate(),
     scan_type: 'Adult Echo',
     report_template_id: '',
+    referral_doctor: '',
     notes: '',
   })
 
@@ -201,7 +203,12 @@ function NewPatient() {
     setSubmitError('')
     setIsSubmitting(true)
     try {
-      const patientResult = await patientService.createPatient(formData)
+      const payload = {
+        ...formData,
+        aadhar_number: formData.aadhaar_no,
+        abha_number: formData.abha_no,
+      }
+      const patientResult = await patientService.createPatient(payload)
       const patient = patientResult.data
       const createdVisits = []
       for (const visit of visits.filter((item) => item.visit_date)) {
@@ -241,12 +248,13 @@ function NewPatient() {
     const visitDate = newVisitInput.visit_date || getInitialVisitDate()
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
     const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || 'Adult Echo'
+    const entryReferralDoctor = newVisitInput.referral_doctor || formData.family_doctor || ''
     const newEntry = {
       id: Date.now(),
       visit_date: visitDate,
       scan_type: entryScanType,
       report_template_id: newVisitInput.report_template_id,
-      referral_doctor: formData.family_doctor || '',
+      referral_doctor: entryReferralDoctor,
       notes: newVisitInput.notes || '',
       image_count: 0,
       avi: 0,
@@ -254,6 +262,9 @@ function NewPatient() {
       ob: '',
     }
     setVisits((prev) => [...prev, newEntry])
+    if (entryReferralDoctor) {
+      setFormData((prev) => ({ ...prev, family_doctor: entryReferralDoctor }))
+    }
     setNewVisitInput((prev) => ({
       ...prev,
       notes: '',
@@ -488,22 +499,13 @@ function NewPatient() {
                       />
                     </div>
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className="block text-xs font-medium text-slate-700">Referral Doctor / Institute</label>
-                        <button
-                          type="button"
-                          onClick={() => setIsReferralModalOpen(true)}
-                          className="text-[11px] font-medium text-teal-600 hover:text-teal-800 hover:underline"
-                        >
-                          Select Doctor
-                        </button>
-                      </div>
-                      <AddableSelect
-                        field="referral_doctor"
-                        value={formData.family_doctor}
-                        onChange={(value) => setFormData({ ...formData, family_doctor: value })}
-                        options={referralOptions}
-                        className={selectClass}
+                      <label className={labelClass}>ABHA No</label>
+                      <input
+                        type="text"
+                        className={inputClass}
+                        value={formData.abha_no}
+                        onChange={(e) => setFormData({ ...formData, abha_no: e.target.value })}
+                        placeholder="14-digit ABHA Number"
                       />
                     </div>
                   </div>
@@ -539,8 +541,8 @@ function NewPatient() {
                   </div>
                 )}
 
-                {/* Form Row: Visit date and time, Scan type, Report template, Visit notes, Add visit button */}
-                <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 lg:grid-cols-[190px_160px_1fr_1fr_auto] items-end">
+                {/* Form Row: Visit date and time, Scan type, Report template, Referral Doctor / Institute, Visit notes, Add visit button */}
+                <div className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 xl:grid-cols-[180px_140px_1fr_1.3fr_1fr_auto] md:grid-cols-2 lg:grid-cols-3 grid-cols-1 items-end">
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Visit date and time *
@@ -595,6 +597,32 @@ function NewPatient() {
                     </select>
                   </div>
 
+                  <div className="min-w-[200px]">
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-slate-600">
+                        Referral Doctor / Institute
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setIsReferralModalOpen(true)}
+                        className="text-[11px] font-medium text-teal-600 hover:text-teal-800 hover:underline"
+                        title="Manage referral directory"
+                      >
+                        Manage
+                      </button>
+                    </div>
+                    <AddableSelect
+                      field="referral_doctor"
+                      value={newVisitInput.referral_doctor}
+                      onChange={(value) => {
+                        setNewVisitInput((prev) => ({ ...prev, referral_doctor: value }))
+                        setFormData((prev) => ({ ...prev, family_doctor: value }))
+                      }}
+                      options={referralOptions}
+                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-medium text-slate-600 mb-1">
                       Visit notes
@@ -616,29 +644,6 @@ function NewPatient() {
                   >
                     <Save className="h-4 w-4" />
                     <span>Add visit</span>
-                  </button>
-                </div>
-
-                {/* Secondary Action Row: New referral doctor, Save and go to reporting */}
-                <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-3 bg-white">
-                  <button
-                    type="button"
-                    onClick={() => setIsReferralModalOpen(true)}
-                    className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3.5 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 hover:border-slate-400"
-                  >
-                    <Stethoscope className="h-4 w-4 text-teal-600" />
-                    <span>New referral doctor</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const reportingBtn = document.getElementById('btn-submit-reporting')
-                      if (reportingBtn) reportingBtn.click()
-                    }}
-                    className="inline-flex h-9 items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 active:bg-teal-900 px-4 text-xs font-semibold text-white shadow-2xs transition"
-                  >
-                    <FileText className="h-4 w-4 text-white" />
-                    <span>Save and go to reporting</span>
                   </button>
                 </div>
 
@@ -782,7 +787,8 @@ function NewPatient() {
           const docName = record.doctor_type === 'hospital'
             ? record.institution_name
             : `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.name
-          setFormData({ ...formData, family_doctor: docName })
+          setFormData((prev) => ({ ...prev, family_doctor: docName }))
+          setNewVisitInput((prev) => ({ ...prev, referral_doctor: docName }))
           if (docName) {
             setReferralOptions((prev) => (prev.includes(docName) ? prev : [...prev, docName]))
           }
