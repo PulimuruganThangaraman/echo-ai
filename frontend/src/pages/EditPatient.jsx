@@ -175,7 +175,22 @@ function EditPatient() {
     ])
       .then(([patientRes, visitsRes, scansRes, tmplRes]) => {
         if (!isMounted) return
-        setTemplates(tmplRes?.data || [])
+        const tmplList = tmplRes?.data || []
+        setTemplates(tmplList)
+        setNewVisitInput((prev) => {
+          if (!prev.report_template_id && prev.scan_type) {
+            const matched = tmplList.find(
+              (t) =>
+                (t.scan_type && t.scan_type.toLowerCase() === prev.scan_type.toLowerCase()) ||
+                (t.title && t.title.toLowerCase().includes(prev.scan_type.toLowerCase())) ||
+                (t.name && t.name.toLowerCase().includes(prev.scan_type.toLowerCase()))
+            )
+            if (matched) {
+              return { ...prev, report_template_id: String(matched.id) }
+            }
+          }
+          return prev
+        })
         if (patientRes?.success || patientRes?.data || patientRes?.patient_id) {
           const patientData = patientRes.data || patientRes
           setFormData((prev) => ({
@@ -855,7 +870,20 @@ function EditPatient() {
                     <select
                       className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
                       value={newVisitInput.scan_type}
-                      onChange={(e) => setNewVisitInput({ ...newVisitInput, scan_type: e.target.value })}
+                      onChange={(e) => {
+                        const nextScanType = e.target.value
+                        const matchingTmpl = templates.find(
+                          (t) =>
+                            (t.scan_type && t.scan_type.toLowerCase() === nextScanType.toLowerCase()) ||
+                            (t.title && t.title.toLowerCase().includes(nextScanType.toLowerCase())) ||
+                            (t.name && t.name.toLowerCase().includes(nextScanType.toLowerCase()))
+                        )
+                        setNewVisitInput((prev) => ({
+                          ...prev,
+                          scan_type: nextScanType,
+                          report_template_id: matchingTmpl ? String(matchingTmpl.id) : prev.report_template_id,
+                        }))
+                      }}
                     >
                       <option value="Adult Echo">Adult Echo</option>
                       <option value="Fetal Echo">Fetal Echo</option>

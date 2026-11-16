@@ -470,7 +470,20 @@ export default function Visits() {
                 disabled={!patient || saving}
                 className="field-control disabled:bg-slate-100"
                 value={visitData.scan_type || defaultScanType}
-                onChange={(event) => setVisitData({ ...visitData, scan_type: event.target.value })}
+                onChange={(event) => {
+                  const nextScanType = event.target.value
+                  const matchingTmpl = templates.find(
+                    (t) =>
+                      (t.scan_type && t.scan_type.toLowerCase() === nextScanType.toLowerCase()) ||
+                      (t.title && t.title.toLowerCase().includes(nextScanType.toLowerCase())) ||
+                      (t.name && t.name.toLowerCase().includes(nextScanType.toLowerCase()))
+                  )
+                  setVisitData((prev) => ({
+                    ...prev,
+                    scan_type: nextScanType,
+                    report_template_id: matchingTmpl ? String(matchingTmpl.id) : prev.report_template_id,
+                  }))
+                }}
               >
                 <option value="Adult Echo">Adult Echo</option>
                 <option value="Fetal Echo">Fetal Echo</option>
