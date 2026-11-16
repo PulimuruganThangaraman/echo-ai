@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CheckCircle2, FileDown, FileText, Film, Mail, Plus, Printer, Save, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, ArrowRight, CheckCircle2, FileDown, FileText, Film, Mail, Plus, Printer, Save, Trash2, Upload } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { Field, FieldGrid, Section, Tabs, Workspace } from '../components/WorkspaceUI'
 import SearchableSelect from '../components/SearchableSelect'
@@ -369,11 +369,18 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     }
   }
 
+  const currentTabs = tabsByType[scanType] || []
+  const currentIndex = currentTabs.indexOf(activeTab)
+
+  const handlePrevious = () => {
+    if (currentIndex > 0) {
+      setActiveTab(currentTabs[currentIndex - 1])
+    }
+  }
+
   const handleSaveAndNext = async () => {
     const ok = await save()
     if (!ok) return
-    const currentTabs = tabsByType[scanType] || []
-    const currentIndex = currentTabs.indexOf(activeTab)
     if (currentIndex >= 0 && currentIndex < currentTabs.length - 1) {
       setActiveTab(currentTabs[currentIndex + 1])
     }
@@ -559,8 +566,18 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       {activeTab === 'Multiframes' && <Multiframes clips={clips} setClips={setClips} addFiles={addFiles} />}
       {activeTab === 'Preview' && <ReportPreview scanType={scanType} data={{ ...data, ...calculated }} setData={setData} patient={patient} />}
 
-      {activeTab !== 'Preview' && (
-        <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex items-center justify-end gap-3">
+        {currentIndex > 0 && (
+          <button
+            type="button"
+            onClick={handlePrevious}
+            className="secondary-button inline-flex items-center gap-2"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Previous
+          </button>
+        )}
+        {activeTab !== 'Preview' && (
           <button
             type="button"
             onClick={handleSaveAndNext}
@@ -570,8 +587,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
             {saving ? 'Saving…' : 'Save & Next'}
             <ArrowRight className="h-4 w-4" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
     </Workspace>
   )
 }
