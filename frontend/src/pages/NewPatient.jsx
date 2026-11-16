@@ -597,7 +597,7 @@ function NewPatient() {
                     </select>
                   </div>
 
-                  <div className="min-w-[200px]">
+                  <div className="min-w-[220px]">
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-medium text-slate-600">
                         Referral Doctor / Institute
@@ -605,22 +605,38 @@ function NewPatient() {
                       <button
                         type="button"
                         onClick={() => setIsReferralModalOpen(true)}
-                        className="text-[11px] font-medium text-teal-600 hover:text-teal-800 hover:underline"
-                        title="Manage referral directory"
+                        className="text-[11px] font-semibold text-teal-600 hover:text-teal-800 hover:underline"
+                        title="Open Referral Doctors & Hospitals manager"
                       >
                         Manage
                       </button>
                     </div>
-                    <AddableSelect
-                      field="referral_doctor"
-                      value={newVisitInput.referral_doctor}
-                      onChange={(value) => {
-                        setNewVisitInput((prev) => ({ ...prev, referral_doctor: value }))
-                        setFormData((prev) => ({ ...prev, family_doctor: value }))
-                      }}
-                      options={referralOptions}
-                      className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                    />
+                    <div className="flex gap-1.5">
+                      <select
+                        className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 transition"
+                        value={newVisitInput.referral_doctor}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setNewVisitInput((prev) => ({ ...prev, referral_doctor: val }))
+                          setFormData((prev) => ({ ...prev, family_doctor: val }))
+                        }}
+                      >
+                        <option value="">Select</option>
+                        {referralOptions.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setIsReferralModalOpen(true)}
+                        title="Add or Manage Referral Doctor / Institute"
+                        className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 shadow-xs transition"
+                      >
+                        <Plus className="h-4 w-4 text-teal-600" />
+                      </button>
+                    </div>
                   </div>
 
                   <div>
