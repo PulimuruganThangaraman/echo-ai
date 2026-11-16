@@ -374,32 +374,8 @@ export default function Visits() {
 
   return (
     <div className="space-y-3">
-      {/* Patient Selector & Info Card */}
+      {/* Patient Info Card */}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-end">
-          <div className="field-label flex-1">
-            <span className="flex items-center gap-2">
-              <span>Select patient</span>
-              {selectedPatient && (
-                <span className="text-xs font-normal text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded-full">
-                  {visits.length} {visits.length === 1 ? 'visit' : 'visits'} recorded
-                </span>
-              )}
-            </span>
-            <SearchableSelect
-              options={patientOptions}
-              value={selectedPatient}
-              onChange={(val) => selectPatient(val, true)}
-              placeholder="Search or select a patient"
-              searchPlaceholder="Search patient ID, name, or visits..."
-            />
-          </div>
-          <button type="button" className="secondary-button" onClick={() => navigate('/patients/new')}>
-            <Plus className="h-4 w-4" />
-            New patient
-          </button>
-        </div>
-
         <div className="grid gap-4 p-4 xl:grid-cols-[1fr_180px]">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <PatientField label="Patient ID" value={patient?.patient_id} />
