@@ -30,7 +30,6 @@ const scanTabs = [
   { id: 'echo-details', label: 'Echo details' },
   { id: 'biometry', label: 'Biometry' },
   { id: 'doppler', label: 'Doppler' },
-  { id: 'aortic', label: 'Aortic stenosis parameters' },
 ]
 
 const imageTabs = [

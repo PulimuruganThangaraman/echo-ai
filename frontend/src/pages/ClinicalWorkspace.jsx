@@ -14,7 +14,7 @@ import {
 const tabsByType = {
   'Adult Echo': ['Echo details', '2D measurements', 'M-Mode', 'Doppler', 'PISA', 'Aortic Stenosis', 'Impression', 'Multiframes', 'Preview'],
   'Pediatric Echo': ['Echo details', 'Biometry', 'Doppler', 'Custom measurements', 'Impression', 'Multiframes', 'Preview'],
-  'Fetal Echo': ['LMP details', 'Echo details', 'Aortic', 'Biometry', 'Doppler', 'Impression', 'Multiframes', 'Preview'],
+  'Fetal Echo': ['LMP details', 'Echo details', 'Biometry', 'Doppler', 'Impression', 'Multiframes', 'Preview'],
 }
 
 const emptyData = (type = 'Adult Echo') => ({
