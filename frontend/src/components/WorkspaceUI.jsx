@@ -49,11 +49,12 @@ export function Section({ title, description, children, className = '' }) {
   )
 }
 
-export function Field({ label, optionField, addable = false, type = 'text', value, onChange, options, placeholder, rows = 3, min, max, hasError = false, error = '', id }) {
+export function Field({ label, optionField, addable = false, type = 'text', value, onChange, onBlur, options, placeholder, rows = 3, min, max, hasError = false, error = '', id }) {
   const common = {
     id,
     value: value ?? '',
     onChange: (event) => onChange?.(type === 'checkbox' ? event.target.checked : event.target.value),
+    onBlur,
   }
 
   const controlClass = `field-control ${hasError ? 'border-red-500 ring-1 ring-red-500 bg-red-50/10' : ''}`

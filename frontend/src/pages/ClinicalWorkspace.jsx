@@ -308,6 +308,21 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
         newErrors.edd = 'EDD is required'
       }
     }
+
+    // Check all echo finding fields: if marked 'Abnormal', the comment is mandatory!
+    echoSections.forEach((section) => {
+      section.fields.forEach((field) => {
+        const val = data[field.key]
+        if (val && String(val).toLowerCase() === 'abnormal') {
+          const commentKey = `${field.key}Comment`
+          const commentVal = data[commentKey]
+          if (!commentVal || !String(commentVal).trim()) {
+            newErrors[commentKey] = `${field.label} comment is required when marked abnormal`
+          }
+        }
+      })
+    })
+
     setErrors(newErrors)
     return {
       isValid: Object.keys(newErrors).length === 0,
@@ -320,6 +335,11 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     if (!isValid) {
       if ((validationErrors.lmp || validationErrors.edd) && scanType === 'Fetal Echo' && activeTab !== 'LMP details') {
         setActiveTab('LMP details')
+      } else {
+        const hasEchoCommentError = Object.keys(validationErrors).some((k) => k.endsWith('Comment'))
+        if (hasEchoCommentError && activeTab !== 'Echo details') {
+          setActiveTab('Echo details')
+        }
       }
       return false
     }
@@ -502,7 +522,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
         <div className="space-y-4">
           {echoSections.map((section) => (
             <Section key={section.title} title={section.title}>
-              <FindingGrid fields={section.fields} data={data} setData={setData} />
+              <FindingGrid fields={section.fields} data={data} setData={setData} errors={errors} setErrors={setErrors} />
             </Section>
           ))}
           <Section title="Additional details">
@@ -556,27 +576,84 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
   )
 }
 
-function FindingGrid({ fields, data, setData }) {
+function FindingGrid({ fields, data, setData, errors = {}, setErrors }) {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      {fields.map((field) => (
-        <div key={field.key} className="grid gap-2 rounded-lg border border-slate-100 bg-slate-50 p-3 sm:grid-cols-2">
-          <Field
-            label={field.label}
-            type={field.type}
-            options={field.options}
-            addable={field.addable}
-            optionField={field.key}
-            value={data[field.key]}
-            onChange={(value) => setData({ ...data, [field.key]: value })}
-          />
-          <Field
-            label={`${field.label} comments`}
-            value={data[`${field.key}Comment`]}
-            onChange={(value) => setData({ ...data, [`${field.key}Comment`]: value })}
-          />
-        </div>
-      ))}
+      {fields.map((field) => {
+        const isAbnormal = String(data[field.key] || '').toLowerCase() === 'abnormal'
+        const commentKey = `${field.key}Comment`
+        const commentError = errors[commentKey]
+
+        return (
+          <div
+            key={field.key}
+            className={`grid gap-2 rounded-lg border p-3 sm:grid-cols-2 transition-colors ${
+              isAbnormal
+                ? 'border-amber-300 bg-amber-50/40 shadow-xs'
+                : 'border-slate-100 bg-slate-50'
+            }`}
+          >
+            <Field
+              label={field.label}
+              type={field.type}
+              options={field.options}
+              addable={field.addable}
+              optionField={field.key}
+              value={data[field.key]}
+              onChange={(value) => {
+                setData((prev) => ({ ...prev, [field.key]: value }))
+                if (String(value || '').toLowerCase() === 'abnormal') {
+                  if (!data[commentKey]?.trim()) {
+                    setErrors?.((prev) => ({
+                      ...prev,
+                      [commentKey]: `${field.label} comment is required when marked abnormal`,
+                    }))
+                  }
+                } else {
+                  setErrors?.((prev) => {
+                    if (!prev[commentKey]) return prev
+                    const next = { ...prev }
+                    delete next[commentKey]
+                    return next
+                  })
+                }
+              }}
+            />
+            <Field
+              id={`comment-input-${field.key}`}
+              label={`${field.label} comments${isAbnormal ? ' *' : ''}`}
+              placeholder={isAbnormal ? 'Describe abnormal findings (required)...' : `${field.label} comments`}
+              value={data[commentKey]}
+              onChange={(value) => {
+                setData((prev) => ({ ...prev, [commentKey]: value }))
+                if (value?.trim()) {
+                  setErrors?.((prev) => {
+                    if (!prev[commentKey]) return prev
+                    const next = { ...prev }
+                    delete next[commentKey]
+                    return next
+                  })
+                } else if (isAbnormal) {
+                  setErrors?.((prev) => ({
+                    ...prev,
+                    [commentKey]: `${field.label} comment is required when marked abnormal`,
+                  }))
+                }
+              }}
+              onBlur={() => {
+                if (isAbnormal && !data[commentKey]?.trim()) {
+                  setErrors?.((prev) => ({
+                    ...prev,
+                    [commentKey]: `${field.label} comment is required when marked abnormal`,
+                  }))
+                }
+              }}
+              hasError={Boolean(commentError)}
+              error={commentError}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }
