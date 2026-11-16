@@ -466,11 +466,6 @@ function NewPatient() {
                       {formErrors.dob && (
                         <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.dob}</p>
                       )}
-                      {formData.dob && formData.age && (
-                        <p className="mt-1 text-xs text-teal-600 font-medium">
-                          Age: {formData.age} {formData.age_unit || 'Years'}
-                        </p>
-                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
@@ -958,7 +953,7 @@ function NewPatient() {
                 {submitError}
               </p>
             )}
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => navigate('/search')}
@@ -968,45 +963,34 @@ function NewPatient() {
                 <span>Cancel</span>
               </button>
 
-              <div className="flex flex-wrap items-center gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:border-teal-500 hover:bg-teal-50/60 hover:text-teal-800 active:bg-teal-100/60 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                >
-                  <Printer className="w-4 h-4 text-slate-500" />
-                  <span>Preview</span>
-                </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500"
+              >
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 text-teal-700" />
+                )}
+                <span>Save</span>
+              </button>
 
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500"
-                >
-                  {isSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 text-teal-700" />
-                  )}
-                  <span>Save</span>
-                </button>
-
-                <button
-                  id="btn-submit-reporting"
-                  type="submit"
-                  value="reporting"
-                  disabled={isSubmitting}
-                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
-                >
-                  {isSubmitting ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Save className="w-4 h-4 text-white" />
-                  )}
-                  <span>Save & Next</span>
-                  <ArrowRight className="w-4 h-4 text-white" />
-                </button>
-              </div>
+              <button
+                id="btn-submit-reporting"
+                type="submit"
+                value="reporting"
+                disabled={isSubmitting}
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
+              >
+                {isSubmitting ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 text-white" />
+                )}
+                <span>Save & Report</span>
+                <ArrowRight className="w-4 h-4 text-white" />
+              </button>
             </div>
           </div>
         </div>
