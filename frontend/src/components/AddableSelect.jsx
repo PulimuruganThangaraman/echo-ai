@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import { customOptionService } from '../api/customOptionService'
 
 export default function AddableSelect({ field, value, onChange, options = [], className = 'field-control' }) {
+  const instanceId = useRef(`addable-${field}-${Math.random().toString(36).substring(2, 9)}`).current
+  const containerRef = useRef(null)
   const [customOptions, setCustomOptions] = useState([])
   const [isAdding, setIsAdding] = useState(false)
   const [newValue, setNewValue] = useState('')
@@ -17,10 +19,56 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
     return () => { active = false }
   }, [field])
 
+  // Listen for when another AddableSelect opens, and close this one
+  useEffect(() => {
+    const handleOtherOpened = (e) => {
+      if (e.detail?.id && e.detail.id !== instanceId) {
+        setIsAdding(false)
+        setError('')
+        setNewValue('')
+      }
+    }
+    window.addEventListener('addable-select-opened', handleOtherOpened)
+    return () => {
+      window.removeEventListener('addable-select-opened', handleOtherOpened)
+    }
+  }, [instanceId])
+
+  // Close when clicking outside of this component
+  useEffect(() => {
+    if (!isAdding) return
+
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsAdding(false)
+        setError('')
+        setNewValue('')
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isAdding])
+
   const allOptions = useMemo(
     () => [...new Set([...options.filter((item) => item && item !== 'Other'), ...customOptions])],
     [options, customOptions],
   )
+
+  const toggleAdding = () => {
+    if (!isAdding) {
+      // Notify all other AddableSelect components to close
+      window.dispatchEvent(new CustomEvent('addable-select-opened', { detail: { id: instanceId } }))
+      setIsAdding(true)
+      setError('')
+    } else {
+      setIsAdding(false)
+      setError('')
+      setNewValue('')
+    }
+  }
 
   const saveOption = async () => {
     const nextValue = newValue.trim()
@@ -42,7 +90,7 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
   }
 
   return (
-    <div>
+    <div ref={containerRef}>
       <div className="flex gap-1">
         <select className={className} value={value || ''} onChange={(event) => onChange(event.target.value)}>
           <option value="">Select</option>
@@ -51,7 +99,7 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
         <button
           type="button"
           title={`Add ${field.replaceAll('_', ' ')}`}
-          onClick={() => { setIsAdding(!isAdding); setError('') }}
+          onClick={toggleAdding}
           className="legacy-plus-button"
         >
           {isAdding ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -64,7 +112,17 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
             className="min-w-0 flex-1 rounded-md border border-teal-300 bg-white px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-teal-500"
             value={newValue}
             onChange={(event) => setNewValue(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); saveOption() } }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                saveOption()
+              } else if (event.key === 'Escape') {
+                event.preventDefault()
+                setIsAdding(false)
+                setNewValue('')
+                setError('')
+              }
+            }}
             placeholder="Enter a new value"
             autoFocus
           />
