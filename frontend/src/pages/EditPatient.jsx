@@ -23,6 +23,7 @@ import {
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
 import { workspaceService } from '../api/workspaceService'
+import { referralDoctorService } from '../api/referralDoctorService'
 import AddableSelect from '../components/AddableSelect'
 import ReferralDoctorModal from '../components/ReferralDoctorModal'
 import {
@@ -104,6 +105,60 @@ function EditPatient() {
   const ethnicOrigins = ['Indian', 'Asian', 'African', 'European', 'Other']
   const salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Baby', 'Master']
   const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
+  const [referralOptions, setReferralOptions] = useState([
+    'Dr. Arvind Swamy',
+    'Dr. Sunita Kulkarni',
+    'Dr. Rajesh V. Varma',
+    'Dr. Meenakshi Sundaram',
+    'Dr. Suresh Hegde',
+    'Dr. Anil Kumar Mehta',
+    'Dr. Preeti Deshmukh',
+    'Dr. Vikramaditya Singh',
+    'Dr. Farhan Ahmed',
+    'Dr. Shalini Reddy',
+    'Dr. Sanjay Joshi',
+    'Dr. Gayatri Nair',
+    'Dr. Harish Chandra',
+    'Dr. Radhika Agarwal',
+    'Dr. Pradeep Rao',
+    'Fortis Heart Institute',
+    'Motherhood Hospital',
+    "Rainbow Children's Hospital",
+    'Apollo Hospitals',
+    'Max Super Speciality Hospital',
+    'Manipal Hospital',
+    'AIIMS Cardiology Center',
+    'Lilavati Hospital & Research Centre',
+    'Narayana Health City',
+    'Cloudnine Hospital',
+    'Sahyadri Hospital',
+    'Aster Medcity',
+    'Columbia Asia Hospital',
+    'Medanta The Medicity',
+    'Care Hospitals',
+  ])
+
+  const loadReferralDoctors = useCallback(async () => {
+    try {
+      const res = await referralDoctorService.getReferralDoctors()
+      const docs = res.data || []
+      const list = []
+      docs.forEach((d) => {
+        if (d.name && !list.includes(d.name)) list.push(d.name)
+        if (d.hospital && !list.includes(d.hospital)) list.push(d.hospital)
+        if (d.institution_name && !list.includes(d.institution_name)) list.push(d.institution_name)
+        const fullName = `${d.first_name || ''} ${d.last_name || ''}`.trim()
+        if (fullName && !list.includes(fullName)) list.push(fullName)
+      })
+      if (list.length > 0) {
+        setReferralOptions((prev) => Array.from(new Set([...prev, ...list])))
+      }
+    } catch {}
+  }, [])
+
+  useEffect(() => {
+    loadReferralDoctors()
+  }, [loadReferralDoctors])
 
   // Fetch patient data, visits, and scans
   useEffect(() => {
@@ -729,25 +784,23 @@ function EditPatient() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Family / Referral Doctor</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          className={inputClass}
-                          value={formData.family_doctor}
-                          onChange={(e) =>
-                            setFormData({ ...formData, family_doctor: e.target.value })
-                          }
-                          placeholder="Doctor or hospital name"
-                        />
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="block text-xs font-medium text-slate-700">Referral Doctor / Institute</label>
                         <button
                           type="button"
                           onClick={() => setIsReferralModalOpen(true)}
-                          className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition text-xs font-semibold whitespace-nowrap"
+                          className="text-[11px] font-medium text-teal-600 hover:text-teal-800 hover:underline"
                         >
                           Select Doctor
                         </button>
                       </div>
+                      <AddableSelect
+                        field="referral_doctor"
+                        value={formData.family_doctor}
+                        onChange={(value) => setFormData({ ...formData, family_doctor: value })}
+                        options={referralOptions}
+                        className={selectClass}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1150,15 +1203,20 @@ function EditPatient() {
       <ReferralDoctorModal
         open={isReferralModalOpen}
         onClose={() => setIsReferralModalOpen(false)}
-        onSelect={(record) =>
+        onSelect={(record) => {
+          const docName =
+            record.doctor_type === 'hospital'
+              ? record.institution_name
+              : `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.name
           setFormData({
             ...formData,
-            family_doctor:
-              record.doctor_type === 'hospital'
-                ? record.institution_name
-                : `${record.first_name || ''} ${record.last_name || ''}`.trim(),
+            family_doctor: docName,
           })
-        }
+          if (docName) {
+            setReferralOptions((prev) => (prev.includes(docName) ? prev : [...prev, docName]))
+          }
+        }}
+        onSaved={loadReferralDoctors}
       />
     </>
   )
