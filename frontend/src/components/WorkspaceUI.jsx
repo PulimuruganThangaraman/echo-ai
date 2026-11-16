@@ -49,11 +49,14 @@ export function Section({ title, description, children, className = '' }) {
   )
 }
 
-export function Field({ label, optionField, addable = false, type = 'text', value, onChange, options, placeholder, rows = 3, min, max }) {
+export function Field({ label, optionField, addable = false, type = 'text', value, onChange, options, placeholder, rows = 3, min, max, hasError = false, error = '', id }) {
   const common = {
+    id,
     value: value ?? '',
     onChange: (event) => onChange?.(type === 'checkbox' ? event.target.checked : event.target.value),
   }
+
+  const controlClass = `field-control ${hasError ? 'border-red-500 ring-1 ring-red-500 bg-red-50/10' : ''}`
 
   return (
     <div className="field-label">
@@ -64,22 +67,24 @@ export function Field({ label, optionField, addable = false, type = 'text', valu
           options={options}
           value={value}
           onChange={onChange}
+          className={controlClass}
         />
       ) : type === 'select' ? (
-        <select className="field-control" {...common}>
+        <select className={controlClass} {...common}>
           <option value="">Select</option>
           {options?.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       ) : type === 'textarea' ? (
-        <textarea className="field-control h-auto py-2" rows={rows} placeholder={placeholder} {...common} />
+        <textarea className={`field-control h-auto py-2 ${hasError ? 'border-red-500 ring-1 ring-red-500 bg-red-50/10' : ''}`} rows={rows} placeholder={placeholder} {...common} />
       ) : type === 'checkbox' ? (
         <span className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3">
           <input type="checkbox" checked={Boolean(value)} onChange={common.onChange} className="h-4 w-4 rounded text-teal-600" />
           <span className="text-sm font-normal text-slate-700">Enabled</span>
         </span>
       ) : (
-        <input className="field-control" type={type} placeholder={placeholder} min={min} max={max} {...common} />
+        <input className={controlClass} type={type} placeholder={placeholder} min={min} max={max} {...common} />
       )}
+      {error && <span className="text-xs text-red-600 font-medium">{error}</span>}
     </div>
   )
 }
