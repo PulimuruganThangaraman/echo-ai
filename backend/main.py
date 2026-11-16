@@ -998,12 +998,29 @@ def get_referral_doctor(doctor_id: int):
 def create_referral_doctor(data: dict):
     conn = get_db()
     cursor = conn.cursor()
+    name = (data.get('name') or '').strip()
+    if not name:
+        if data.get('doctor_type') == 'hospital' or data.get('institution_name'):
+            name = (data.get('institution_name') or '').strip()
+        else:
+            parts = [data.get('salutation'), data.get('first_name'), data.get('middle_name'), data.get('last_name')]
+            name = ' '.join(p.strip() for p in parts if p and str(p).strip())
+    if not name:
+        name = (data.get('hospital') or data.get('parent_institution') or 'Unknown Referral').strip()
+
+    hospital = (data.get('hospital') or data.get('institution_name') or data.get('parent_institution') or '').strip()
+    specialty = (data.get('specialty') or data.get('speciality') or '').strip()
+    registration_number = (data.get('registration_number') or data.get('reg_no') or '').strip()
+    clinic_address = (data.get('clinic_address') or data.get('district_city') or data.get('street') or '').strip()
+    phone = (data.get('phone') or data.get('mobile') or data.get('phone1') or '').strip()
+    email = (data.get('email') or '').strip()
+    qualification = (data.get('qualification') or '').strip()
+
     cursor.execute('''
         INSERT INTO referral_doctors (name, qualification, specialty, hospital, clinic_address, phone, email, registration_number)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        data.get('name'), data.get('qualification'), data.get('specialty'), data.get('hospital'),
-        data.get('clinic_address'), data.get('phone'), data.get('email'), data.get('registration_number')
+        name, qualification, specialty, hospital, clinic_address, phone, email, registration_number
     ))
     doctor_id = cursor.lastrowid
     conn.commit()
@@ -1015,14 +1032,31 @@ def create_referral_doctor(data: dict):
 def update_referral_doctor(doctor_id: int, data: dict):
     conn = get_db()
     cursor = conn.cursor()
+    name = (data.get('name') or '').strip()
+    if not name:
+        if data.get('doctor_type') == 'hospital' or data.get('institution_name'):
+            name = (data.get('institution_name') or '').strip()
+        else:
+            parts = [data.get('salutation'), data.get('first_name'), data.get('middle_name'), data.get('last_name')]
+            name = ' '.join(p.strip() for p in parts if p and str(p).strip())
+    if not name:
+        name = (data.get('hospital') or data.get('parent_institution') or 'Unknown Referral').strip()
+
+    hospital = (data.get('hospital') or data.get('institution_name') or data.get('parent_institution') or '').strip()
+    specialty = (data.get('specialty') or data.get('speciality') or '').strip()
+    registration_number = (data.get('registration_number') or data.get('reg_no') or '').strip()
+    clinic_address = (data.get('clinic_address') or data.get('district_city') or data.get('street') or '').strip()
+    phone = (data.get('phone') or data.get('mobile') or data.get('phone1') or '').strip()
+    email = (data.get('email') or '').strip()
+    qualification = (data.get('qualification') or '').strip()
+
     cursor.execute('''
         UPDATE referral_doctors SET
             name = ?, qualification = ?, specialty = ?, hospital = ?, clinic_address = ?,
             phone = ?, email = ?, registration_number = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     ''', (
-        data.get('name'), data.get('qualification'), data.get('specialty'), data.get('hospital'),
-        data.get('clinic_address'), data.get('phone'), data.get('email'), data.get('registration_number'), doctor_id
+        name, qualification, specialty, hospital, clinic_address, phone, email, registration_number, doctor_id
     ))
     conn.commit()
     updated = conn.execute('SELECT * FROM referral_doctors WHERE id = ?', (doctor_id,)).fetchone()

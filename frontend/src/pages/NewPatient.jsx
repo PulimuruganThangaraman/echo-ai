@@ -784,13 +784,18 @@ function NewPatient() {
         open={isReferralModalOpen}
         onClose={() => setIsReferralModalOpen(false)}
         onSelect={(record) => {
-          const docName = record.doctor_type === 'hospital'
-            ? record.institution_name
-            : `${record.first_name || ''} ${record.last_name || ''}`.trim() || record.name
+          const docName =
+            record.name ||
+            (record.doctor_type === 'hospital'
+              ? record.institution_name
+              : `${record.first_name || ''} ${record.last_name || ''}`.trim()) ||
+            record.hospital ||
+            ''
           setFormData((prev) => ({ ...prev, family_doctor: docName }))
           setNewVisitInput((prev) => ({ ...prev, referral_doctor: docName }))
-          if (docName) {
-            setReferralOptions((prev) => (prev.includes(docName) ? prev : [...prev, docName]))
+          const itemsToAdd = [docName, record.name, record.hospital, record.institution_name].filter(Boolean)
+          if (itemsToAdd.length > 0) {
+            setReferralOptions((prev) => Array.from(new Set([...prev, ...itemsToAdd])))
           }
         }}
         onSaved={loadReferralDoctors}
