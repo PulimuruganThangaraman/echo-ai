@@ -577,7 +577,17 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       {activeTab === 'Custom measurements' && <CustomMeasurements data={data} setData={setData} />}
       {activeTab === 'Impression' && <Impression data={data} setData={setData} doctors={doctors} errors={errors} setErrors={setErrors} />}
       {activeTab === 'Referral letter' && <ReferralLetter data={data} setData={setData} doctors={doctors} patient={patient} />}
-      {activeTab === 'Preview' && <ReportPreview scanType={scanType} data={{ ...data, ...calculated }} setData={setData} patient={patient} />}
+      {activeTab === 'Preview' && (
+        <ReportPreview
+          scanType={scanType}
+          data={{ ...data, ...calculated }}
+          setData={setData}
+          patient={patient}
+          visit={visits.find((v) => String(v.id) === String(visitId))}
+          doctors={doctors}
+          onNavigateTab={setActiveTab}
+        />
+      )}
 
       <div className="mt-6 flex items-center justify-end gap-3 print:hidden">
         {currentIndex > 0 && (
@@ -879,9 +889,18 @@ function ReferralLetter({ data, setData, doctors, patient }) {
   )
 }
 
-function ReportPreview({ scanType, data, setData, patient }) {
+function ReportPreview({ scanType, data, setData, patient, visit, doctors, onNavigateTab }) {
   if (scanType === 'Fetal Echo') {
-    return <FetalEchoTemplateReport data={data} setData={setData} patient={patient} />
+    return (
+      <FetalEchoTemplateReport
+        data={data}
+        setData={setData}
+        patient={patient}
+        visit={visit}
+        doctors={doctors}
+        onNavigateTab={onNavigateTab}
+      />
+    )
   }
 
   const options = [
