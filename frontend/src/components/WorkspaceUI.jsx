@@ -90,7 +90,7 @@ export function Field({ label, optionField, addable = false, type = 'text', valu
   )
 }
 
-export function FieldGrid({ fields, data, setData, columns = 'lg:grid-cols-4' }) {
+export function FieldGrid({ fields, data, setData, columns = 'lg:grid-cols-4', errors = {} }) {
   return (
     <div className={`grid gap-3 sm:grid-cols-2 ${columns}`}>
       {fields.map(({ key, ...fieldProps }) => (
@@ -100,6 +100,8 @@ export function FieldGrid({ fields, data, setData, columns = 'lg:grid-cols-4' })
           optionField={key}
           value={data[key]}
           onChange={(value) => setData({ ...data, [key]: value })}
+          hasError={Boolean(errors?.[key])}
+          error={errors?.[key]}
         />
       ))}
     </div>

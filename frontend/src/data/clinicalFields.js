@@ -3,13 +3,73 @@ const t = (key, label) => ({ key, label })
 const s = (key, label, options = ['Normal', 'Abnormal', 'Not visualised', 'Not applicable']) => ({ key, label, type: 'select', options, addable: true })
 
 export const echoSections = [
-  { title: 'Position, situs and connections', fields: [s('cardiacPosition','Cardiac position'),s('situs','Situs'),s('systemicVenous','Systemic venous connection'),s('pulmonaryVenous','Pulmonary venous connection'),s('avConnection','Atrio-ventricular connection'),s('vaConnection','Ventriculo-arterial connection'),s('greatArteries','Great artery relationship')] },
-  { title: 'Atria and septa', fields: [s('atria','Atria'),s('interatrialSeptum','Interatrial septum'),s('foramenOvale','Foramen ovale'),s('interventricularSeptum','Interventricular septum')] },
-  { title: 'Valves', fields: [s('tricuspidValve','Tricuspid valve'),s('tricuspidRegurgitation','TR'),s('mitralValve','Mitral valve'),s('mitralRegurgitation','MR'),s('aorticValve','Aortic valve'),s('aorticRegurgitation','AR'),s('aorticStenosis','AS'),s('pulmonaryValve','Pulmonary valve'),s('pulmonaryRegurgitation','PR'),s('pulmonaryStenosis','PS')] },
-  { title: 'Ventricles and function', fields: [s('rightVentricle','Right ventricle'),s('rvContractility','RV contractility'),s('leftVentricle','Left ventricle'),s('lvContractility','LV contractility'),s('wallMotion','Regional wall motion'),s('diastolicFunction','Diastolic function')] },
-  { title: 'Great Arteries & Outflow Tracts', fields: [s('greatArteryRelationship','Great artery relationship'),s('ascendingAorta','Ascending aorta'),s('mainPulmonaryArtery','Main pulmonary artery'),s('branchPulmonaryArteries','Branch pulmonary arteries'),s('coronaries','Coronaries')] },
-  { title: 'Aortic & Ductal Arches', fields: [s('aorticArch','Aortic arch'),s('descendingAorta','Descending aorta'),s('ductusArteriosus','Ductus arteriosus')] },
-  { title: 'Pericardium & Effusions', fields: [s('pericardium','Pericardium / Effusion'),s('pleuralEffusion','Pleural effusion')] },
+  {
+    title: 'Position, situs and connections',
+    fields: [
+      s('cardiacPosition', 'Cardiac position'),
+      s('situs', 'Situs'),
+      s('systemicVenous', 'Systemic venous connection'),
+      s('pulmonaryVenous', 'Pulmonary venous connection'),
+      s('atria', 'Right and left atria'),
+      s('interatrialSeptum', 'Interatrial septum'),
+      s('foramenOvale', 'Foramen ovale'),
+      s('avConnection', 'Atrio-ventricular connection'),
+      s('vaConnection', 'Ventriculo-arterial connection'),
+      s('greatArteries', 'Great artery relationship'),
+    ],
+  },
+  {
+    title: 'Valves',
+    fields: [
+      s('tricuspidValve', 'Tricuspid valve'),
+      s('tricuspidRegurgitation', 'TR'),
+      s('mitralValve', 'Mitral valve'),
+      s('mitralRegurgitation', 'MR'),
+      s('aorticValve', 'Aortic valve'),
+      s('aorticRegurgitation', 'AR'),
+      s('aorticStenosis', 'AS'),
+      s('pulmonaryValve', 'Pulmonary valve'),
+      s('pulmonaryRegurgitation', 'PR'),
+      s('pulmonaryStenosis', 'PS'),
+    ],
+  },
+  {
+    title: 'Ventricles and function',
+    fields: [
+      s('interventricularSeptum', 'Interventricular septum'),
+      s('rightVentricle', 'Right ventricle'),
+      s('rvContractility', 'RV contractility'),
+      s('leftVentricle', 'Left ventricle'),
+      s('lvContractility', 'LV contractility'),
+      s('wallMotion', 'Regional wall motion'),
+      s('diastolicFunction', 'Diastolic function'),
+    ],
+  },
+  {
+    title: 'Great Arteries & Outflow Tracts',
+    fields: [
+      s('greatArteryRelationship', 'Great artery relationship'),
+      s('ascendingAorta', 'Ascending aorta'),
+      s('mainPulmonaryArtery', 'Main pulmonary artery'),
+      s('branchPulmonaryArteries', 'Branch pulmonary arteries'),
+      s('coronaries', 'Coronaries'),
+    ],
+  },
+  {
+    title: 'Aortic & Ductal Arches',
+    fields: [
+      s('aorticArch', 'Aortic arch'),
+      s('descendingAorta', 'Descending aorta'),
+      s('ductusArteriosus', 'Ductus arteriosus'),
+    ],
+  },
+  {
+    title: 'Pericardium & Effusions',
+    fields: [
+      s('pericardium', 'Pericardium / Effusion'),
+      s('pleuralEffusion', 'Pleural effusion'),
+    ],
+  },
 ]
 
 export const adult2D = [
@@ -47,8 +107,33 @@ export const pediatricDoppler = [n('mvE','MV E','m/s'),n('mvA','MV A','m/s'),n('
 
 export const fetalBiometry = [n('bpd','BPD','mm'),n('hc','Head circumference','mm'),n('ac','Abdominal circumference','mm'),n('fl','Femur length','mm'),n('efw','Estimated fetal weight','g'),n('heartRate','Fetal heart rate','bpm'),n('heartArea','Heart area','cm²'),n('thoraxArea','Thorax area','cm²'),n('ctRatio','Cardiothoracic ratio'),n('cardiacCircumference','Cardiac circumference','cm'),n('thoracicCircumference','Thoracic circumference','cm'),n('mvAnnulus','Mitral valve annulus','mm'),n('tvAnnulus','Tricuspid valve annulus','mm'),n('avAnnulus','Aortic valve annulus','mm'),n('pvAnnulus','Pulmonary valve annulus','mm'),n('raWidth','Right atrial width','mm'),n('raLength','Right atrial length','mm'),n('laWidth','Left atrial width','mm'),n('laLength','Left atrial length','mm'),n('rvWidth','Right ventricular width','mm'),n('lvWidth','Left ventricular width','mm'),n('aorticIsthmus','Aortic isthmus','mm'),n('ductalArch','Ductal arch','mm')]
 
-export const fetalDoppler = [n('mvE','Mitral E','cm/s'),n('mvA','Mitral A','cm/s'),n('tvE','Tricuspid E','cm/s'),n('tvA','Tricuspid A','cm/s'),n('avVmax','Aortic valve Vmax','cm/s'),n('pvVmax','Pulmonary valve Vmax','cm/s'),n('ductusVmax','Ductus arteriosus Vmax','cm/s')]
+export const fetalDoppler = [
+  n('mvE', 'Mitral E', 'cm/s'),
+  n('mvA', 'Mitral A', 'cm/s'),
+  n('tvE', 'Tricuspid E', 'cm/s'),
+  n('tvA', 'Tricuspid A', 'cm/s'),
+  n('avVmax', 'Aortic valve Vmax', 'cm/s'),
+  n('pvVmax', 'Pulmonary valve Vmax', 'cm/s'),
+  n('ductusVmax', 'Ductus arteriosus Vmax', 'cm/s'),
+  n('umbilicalPi', 'Umbilical artery PI'),
+  n('umbilicalRi', 'Umbilical artery RI'),
+  n('mcaPi', 'Middle cerebral artery PI'),
+  n('mcaRi', 'Middle cerebral artery RI'),
+  n('dvPi', 'Ductus venosus PI'),
+  n('ivcPi', 'Inferior vena cava PI'),
+]
 
 export const lmpFields = [t('lmp','LMP'),t('edd','EDD'),n('gaWeeks','Gestational age – weeks'),n('gaDays','Days'),s('datingMethod','Dating method',['LMP','Ultrasound','Embryo transfer']),t('etDate','Embryo transfer date'),t('btDate','Blastocyst transfer date'),s('fetuses','Number of fetuses',['Single','Twins','Triplets','Four'])]
 
-export const impressionFields = [{ key: 'reportType', label: 'Report type', type: 'select', options: ['Normal', 'Abnormal', 'Ambiguity', 'Growth abnormality'] },t('firstLine','First line of report'),t('signedByLeft','Report signed by (L)'),t('signedByRight','Report signed by (R)'),t('primaryConsultant','Primary consultant'),t('secondConsultant','Second consultant'),t('auditedBy','Audited by'),t('typedBy','Report typed by')]
+export const impressionFields = [
+  { key: 'reportType', label: 'Type of report', type: 'select', options: ['Normal', 'Abnormal', 'Ambiguous'] },
+  t('firstLine', 'First line of report'),
+  t('primaryConsultant', 'Primary consultant *'),
+  t('secondConsultant', 'Second consultant (optional)'),
+  t('signedByLeft', 'Report signed by (L)'),
+  t('signedByRight', 'Report signed by (R)'),
+  s('auditDone', 'Audit done', ['No', 'Yes']),
+  s('reportDone', 'Report done', ['No', 'Yes']),
+  t('auditedBy', 'Audited by'),
+  t('typedBy', 'Report typed by'),
+]

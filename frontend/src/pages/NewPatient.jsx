@@ -52,7 +52,7 @@ function NewPatient() {
     ethnic_origin: '',
     street: '',
     zip_code: '',
-    country: '',
+    country: 'India',
     state: '',
     district_city: '',
     email: '',
@@ -211,6 +211,7 @@ function NewPatient() {
 
   const validatePatientInfo = () => {
     const errors = {}
+    if (!formData.salutation?.trim()) errors.salutation = 'Salutation is required'
     if (!formData.patient_id?.trim()) errors.patient_id = 'Patient ID is required'
     if (!formData.first_name?.trim()) errors.first_name = 'First Name is required'
     if (!formData.last_name?.trim()) errors.last_name = 'Parent / Spouse Name is required'
@@ -336,6 +337,10 @@ function NewPatient() {
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
     const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || 'Adult Echo'
     const entryReferralDoctor = newVisitInput.referral_doctor || formData.family_doctor || ''
+    if (!entryReferralDoctor.trim()) {
+      setVisitFormError('Referral Doctor / Institute is required')
+      return
+    }
     const newEntry = {
       id: Date.now(),
       visit_date: visitDate,
@@ -417,8 +422,20 @@ function NewPatient() {
                       )}
                     </div>
                     <div>
-                      <label className={labelClass}>Salutation</label>
-                      <AddableSelect field="patient_salutation" className={selectClass} options={salutations} value={formData.salutation} onChange={(value) => updateFormField('salutation', value)} />
+                      <label className={labelClass}>Salutation *</label>
+                      <AddableSelect
+                        field="patient_salutation"
+                        className={getSelectClass('salutation')}
+                        options={salutations}
+                        value={formData.salutation}
+                        onChange={(value) => {
+                          updateFormField('salutation', value)
+                          clearFieldError('salutation')
+                        }}
+                      />
+                      {formErrors.salutation && (
+                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.salutation}</p>
+                      )}
                     </div>
                     <div>
                       <label className={labelClass}>First Name *</label>
@@ -810,7 +827,7 @@ function NewPatient() {
                   <div className="min-w-[220px]">
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-medium text-slate-600">
-                        Referral Doctor / Institute
+                        Referral Doctor / Institute *
                       </label>
                       <button
                         type="button"

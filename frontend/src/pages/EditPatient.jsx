@@ -16,6 +16,7 @@ import {
   ArrowRight,
   Building,
   CheckCircle2,
+  Lock,
   UserCheck,
   Stethoscope,
   FileText,
@@ -342,6 +343,10 @@ function EditPatient() {
     const selectedTmpl = templates.find((t) => String(t.id) === String(newVisitInput.report_template_id))
     const entryScanType = newVisitInput.scan_type || selectedTmpl?.scan_type || selectedScans[0] || 'Adult Echo'
     const entryReferralDoctor = newVisitInput.referral_doctor || formData.family_doctor || ''
+    if (!entryReferralDoctor.trim()) {
+      setVisitFormError('Referral Doctor / Institute is required')
+      return
+    }
     const newEntry = {
       id: Date.now(),
       visit_date: newVisitInput.visit_date,
@@ -459,6 +464,8 @@ function EditPatient() {
     'w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition text-xs sm:text-sm text-slate-800 bg-white'
   const selectClass =
     'w-full px-3 py-2 pr-8 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent transition appearance-none bg-white text-xs sm:text-sm text-slate-800'
+  const lockedInputClass =
+    'w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-600 text-xs sm:text-sm cursor-not-allowed select-none opacity-80'
   const labelClass = 'block text-xs font-semibold text-slate-700 mb-1.5'
   const dialCode = getDialCode(formData.country)
   const patientInitials = getInitials(formData.first_name, formData.last_name)
@@ -544,25 +551,27 @@ function EditPatient() {
                   </h2>
                 </div>
                 <div className="p-4">
+                  <div className="flex items-center gap-2 mb-4 p-2.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium">
+                    <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>Core patient demographic details are locked after initial registration. Phone numbers, email, and address details remain fully editable below.</span>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <label className={labelClass}>Patient ID *</label>
+                      <label className={labelClass}>Patient ID (Locked)</label>
                       <input
                         id="field-patient_id"
                         type="text"
-                        className={getInputClass('patient_id')}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.patient_id}
-                        onChange={(e) => updateFormField('patient_id', e.target.value)}
                         placeholder="e.g., TM00100"
                       />
-                      {formErrors.patient_id && (
-                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.patient_id}</p>
-                      )}
                     </div>
                     <div>
-                      <label className={labelClass}>Salutation</label>
+                      <label className={labelClass}>Salutation (Locked)</label>
                       <AddableSelect
                         field="patient_salutation"
+                        disabled
                         className={selectClass}
                         options={salutations}
                         value={formData.salutation}
@@ -570,78 +579,65 @@ function EditPatient() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>First Name *</label>
+                      <label className={labelClass}>First Name (Locked)</label>
                       <input
                         id="field-first_name"
                         type="text"
-                        className={getInputClass('first_name')}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.first_name}
-                        onChange={(e) => updateFormField('first_name', e.target.value)}
                       />
-                      {formErrors.first_name && (
-                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.first_name}</p>
-                      )}
                     </div>
                     <div>
-                      <label className={labelClass}>Parent / Spouse Name *</label>
+                      <label className={labelClass}>Parent / Spouse Name (Locked)</label>
                       <input
                         id="field-last_name"
                         type="text"
-                        className={getInputClass('last_name')}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.last_name}
-                        onChange={(e) => updateFormField('last_name', e.target.value)}
                         placeholder="Parent / Spouse Name"
                       />
-                      {formErrors.last_name && (
-                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.last_name}</p>
-                      )}
                     </div>
                     <div>
-                      <label className={labelClass}>Middle Name</label>
+                      <label className={labelClass}>Middle Name (Locked)</label>
                       <input
                         type="text"
-                        className={inputClass}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.middle_name}
-                        onChange={(e) => updateFormField('middle_name', e.target.value)}
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Date of Birth *</label>
+                      <label className={labelClass}>Date of Birth (Locked)</label>
                       <div className="relative">
                         <input
                           id="field-dob"
                           type="date"
-                          className={`${getInputClass('dob')} pr-10`}
+                          disabled
+                          className={`${lockedInputClass} pr-10`}
                           value={formData.dob}
-                          onChange={(e) => handleDobChange(e.target.value)}
                         />
                         <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       </div>
-                      {formErrors.dob && (
-                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.dob}</p>
-                      )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className={labelClass}>Age</label>
+                        <label className={labelClass}>Age (Locked)</label>
                         <input
                           type="number"
-                          className={inputClass}
+                          disabled
+                          className={lockedInputClass}
                           value={formData.age}
-                          onChange={(e) => updateFormField('age', e.target.value)}
                           placeholder="Age"
                         />
                       </div>
                       <div>
-                        <label className={labelClass}>Unit</label>
+                        <label className={labelClass}>Unit (Locked)</label>
                         <select
-                          className={selectClass}
+                          disabled
+                          className={`${selectClass} bg-slate-100 text-slate-500 cursor-not-allowed`}
                           value={formData.age_unit || 'Years'}
-                          onChange={(e) => {
-                            const newUnit = e.target.value;
-                            const newAge = formData.dob ? calculateAgeForUnit(formData.dob, newUnit) : formData.age;
-                            setFormData({ ...formData, age_unit: newUnit, age: newAge });
-                          }}
                         >
                           <option value="Years">Years</option>
                           <option value="Months">Months</option>
@@ -650,35 +646,31 @@ function EditPatient() {
                       </div>
                     </div>
                     <div>
-                      <label className={labelClass}>Gender *</label>
+                      <label className={labelClass}>Gender (Locked)</label>
                       <div
                         id="field-gender"
-                        className={`flex items-center gap-3 mt-1.5 transition ${
-                          formErrors.gender ? 'p-1.5 rounded-lg border border-red-500 ring-1 ring-red-500 bg-red-50/40' : 'p-1.5'
-                        }`}
+                        className="flex items-center gap-3 mt-1.5 p-1.5 opacity-80"
                       >
                         {['M', 'F', 'UA'].map((g) => (
-                          <label key={g} className="flex items-center gap-1.5 cursor-pointer">
+                          <label key={g} className="flex items-center gap-1.5 cursor-not-allowed">
                             <input
                               type="radio"
                               name="gender"
                               value={g}
+                              disabled
                               checked={formData.gender === g}
-                              onChange={(e) => updateFormField('gender', e.target.value)}
-                              className="w-4 h-4 text-teal-600 focus:ring-teal-500"
+                              className="w-4 h-4 text-slate-400 cursor-not-allowed"
                             />
-                            <span className="text-sm text-slate-700 font-medium">{g}</span>
+                            <span className="text-sm text-slate-600 font-medium">{g}</span>
                           </label>
                         ))}
                       </div>
-                      {formErrors.gender && (
-                        <p className="mt-1 text-xs text-red-600 font-medium">{formErrors.gender}</p>
-                      )}
                     </div>
                     <div>
-                      <label className={labelClass}>Marital Status</label>
+                      <label className={labelClass}>Marital Status (Locked)</label>
                       <AddableSelect
                         field="patient_marital_status"
+                        disabled
                         className={selectClass}
                         options={maritalStatuses}
                         value={formData.marital_status}
@@ -686,9 +678,10 @@ function EditPatient() {
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>Ethnic Origin</label>
+                      <label className={labelClass}>Ethnic Origin (Locked)</label>
                       <AddableSelect
                         field="patient_ethnic_origin"
+                        disabled
                         className={selectClass}
                         options={ethnicOrigins}
                         value={formData.ethnic_origin}
@@ -905,26 +898,22 @@ function EditPatient() {
                 <div className="p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className={labelClass}>Aadhaar No</label>
+                      <label className={labelClass}>Aadhaar No (Locked)</label>
                       <input
                         type="text"
-                        className={inputClass}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.aadhaar_no}
-                        onChange={(e) =>
-                          setFormData({ ...formData, aadhaar_no: e.target.value })
-                        }
                         placeholder="XXXX XXXX XXXX"
                       />
                     </div>
                     <div>
-                      <label className={labelClass}>ABHA No</label>
+                      <label className={labelClass}>ABHA No (Locked)</label>
                       <input
                         type="text"
-                        className={inputClass}
+                        disabled
+                        className={lockedInputClass}
                         value={formData.abha_no}
-                        onChange={(e) =>
-                          setFormData({ ...formData, abha_no: e.target.value })
-                        }
                         placeholder="14-digit ABHA Number"
                       />
                     </div>
@@ -1045,7 +1034,7 @@ function EditPatient() {
                   <div className="min-w-[220px]">
                     <div className="flex items-center justify-between mb-1">
                       <label className="block text-xs font-medium text-slate-600">
-                        Referral Doctor / Institute
+                        Referral Doctor / Institute *
                       </label>
                       <button
                         type="button"

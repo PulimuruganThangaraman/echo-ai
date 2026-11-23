@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   Calendar,
   CheckCircle2,
+  Edit3,
   FileText,
   Plus,
   Save,
@@ -295,6 +296,10 @@ export default function Visits() {
       alert('The selected patient record could not be found')
       return
     }
+    if (!visitData.referral_doctor || !String(visitData.referral_doctor).trim()) {
+      alert('Referral Doctor / Institute is required')
+      return
+    }
     setSaving(true)
     setStatus('')
     try {
@@ -375,7 +380,21 @@ export default function Visits() {
   return (
     <div className="space-y-3">
       {/* Patient Info Card */}
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 bg-slate-50">
+          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Patient Information</span>
+          {patient && (
+            <button
+              type="button"
+              onClick={() => navigate(`/patients/${patient.id}/edit`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-teal-200 bg-white hover:bg-teal-50 text-teal-700 text-xs font-semibold shadow-2xs transition"
+              title="Edit Patient Phone, Email & Address"
+            >
+              <Edit3 className="h-3.5 w-3.5" />
+              Edit Phone, Email & Address
+            </button>
+          )}
+        </div>
         <div className="grid gap-4 p-4 xl:grid-cols-[1fr_180px]">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <PatientField label="Patient ID" value={patient?.patient_id} />
@@ -540,7 +559,7 @@ export default function Visits() {
           <div className="min-w-[200px]">
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-medium text-slate-600">
-                Referral Doctor / Institute
+                Referral Doctor / Institute *
               </label>
               <button
                 type="button"

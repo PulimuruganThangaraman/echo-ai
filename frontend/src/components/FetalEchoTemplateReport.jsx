@@ -152,7 +152,7 @@ export default function FetalEchoTemplateReport({
 
   // Signatures
   const primaryDoctor = data.primaryConsultant || data.signedByLeft || 'Dr. Shanthi'
-  const secondaryDoctor = data.signedByRight || data.secondConsultant || ''
+  const secondaryDoctor = data.secondConsultant || data.signedByRight || ''
   const auditedBy = data.auditedBy || 'Quality Assurance Committee'
 
   const handleFillStandardNormal = () => {
@@ -215,6 +215,8 @@ export default function FetalEchoTemplateReport({
           <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
             <ShieldCheck className="h-3 w-3" />
             {data.investigationStatus || 'Final Report'}
+            {data.auditDone === 'Yes' && ' • Audited'}
+            {data.reportDone === 'Yes' && ' • Report Done'}
           </span>
         </div>
 
@@ -369,8 +371,14 @@ export default function FetalEchoTemplateReport({
               </div>
               <div>
                 <span className="text-slate-500">Study Classification:</span>{' '}
-                <span className="font-semibold text-teal-900 bg-teal-50 px-1.5 py-0.5 rounded border border-teal-200 inline-block">
-                  {data.reportType || 'Normal Fetal Scan'}
+                <span className={`font-semibold px-1.5 py-0.5 rounded border inline-block ${
+                  data.reportType === 'Abnormal'
+                    ? 'text-rose-900 bg-rose-50 border-rose-200'
+                    : data.reportType === 'Ambiguous'
+                    ? 'text-amber-900 bg-amber-50 border-amber-200'
+                    : 'text-teal-900 bg-teal-50 border-teal-200'
+                }`}>
+                  {data.reportType || 'Normal'}
                 </span>
               </div>
               <div>
@@ -516,11 +524,29 @@ export default function FetalEchoTemplateReport({
                   Atrial Chambers & Foramen Ovale
                 </td>
                 <td className="p-2 text-slate-900">
-                  Right atrium and Left atrium are of normal and balanced proportions. Interatrial septum is intact with a patent, physiological foramen ovale flap valve moving actively into the left atrium with physiological right-to-left shunting.
+                  {data.atriaComment || isAbnormalField(data.atria) ? (
+                    <span className="font-semibold text-rose-700">{data.atriaComment || 'Abnormal right and left atria. '}</span>
+                  ) : (
+                    'Right atrium and Left atrium are of normal and balanced proportions. '
+                  )}
+                  {data.interatrialSeptumComment || isAbnormalField(data.interatrialSeptum) ? (
+                    <span className="font-semibold text-rose-700">{data.interatrialSeptumComment || 'Interatrial septum abnormality noted. '}</span>
+                  ) : (
+                    'Interatrial septum is intact '
+                  )}
+                  {data.foramenOvaleComment || isAbnormalField(data.foramenOvale) ? (
+                    <span className="font-semibold text-rose-700">{data.foramenOvaleComment || 'Foramen ovale flap restricted or abnormal.'}</span>
+                  ) : (
+                    'with a patent, physiological foramen ovale flap valve moving actively into the left atrium with physiological right-to-left shunting.'
+                  )}
                 </td>
                 <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    isAbnormalField(data.atria) || isAbnormalField(data.interatrialSeptum) || isAbnormalField(data.foramenOvale)
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}>
+                    {isAbnormalField(data.atria) || isAbnormalField(data.interatrialSeptum) || isAbnormalField(data.foramenOvale) ? 'ABNORMAL' : 'NORMAL'}
                   </span>
                 </td>
               </tr>
@@ -580,11 +606,19 @@ export default function FetalEchoTemplateReport({
                   Interventricular Septum (IVS)
                 </td>
                 <td className="p-2 text-slate-900">
-                  Interventricular septum is intact along both membranous and muscular segments. No ventricular septal defect (VSD) demonstrated on 2D or Color Doppler interrogation.
+                  {data.interventricularSeptumComment || isAbnormalField(data.interventricularSeptum) ? (
+                    <span className="font-semibold text-rose-700">{data.interventricularSeptumComment || 'Defect or abnormality noted in interventricular septum.'}</span>
+                  ) : (
+                    'Interventricular septum is intact along both membranous and muscular segments. No ventricular septal defect (VSD) demonstrated on 2D or Color Doppler interrogation.'
+                  )}
                 </td>
                 <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    isAbnormalField(data.interventricularSeptum)
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}>
+                    {isAbnormalField(data.interventricularSeptum) ? 'ABNORMAL' : 'NORMAL'}
                   </span>
                 </td>
               </tr>
@@ -769,6 +803,42 @@ export default function FetalEchoTemplateReport({
                 <td className="p-2 font-mono font-bold text-slate-900">32 cm/s</td>
                 <td className="p-2 text-right text-emerald-700 font-medium">Physiological</td>
               </tr>
+              {(data.umbilicalPi || data.umbilicalRi) && (
+                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
+                  <td className="p-2 font-medium text-slate-800">Umbilical Artery</td>
+                  <td className="p-2 text-slate-700">Forward continuous end-diastolic flow</td>
+                  <td className="p-2 font-mono font-bold text-slate-900">
+                    {data.umbilicalPi ? `PI: ${data.umbilicalPi}` : ''}{data.umbilicalPi && data.umbilicalRi ? ' | ' : ''}{data.umbilicalRi ? `RI: ${data.umbilicalRi}` : ''}
+                  </td>
+                  <td className="p-2 text-right text-emerald-700 font-medium">Placental impedance normal</td>
+                </tr>
+              )}
+              {(data.mcaPi || data.mcaRi) && (
+                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
+                  <td className="p-2 font-medium text-slate-800">Middle Cerebral Artery (MCA)</td>
+                  <td className="p-2 text-slate-700">High resistance cerebral circulation</td>
+                  <td className="p-2 font-mono font-bold text-slate-900">
+                    {data.mcaPi ? `PI: ${data.mcaPi}` : ''}{data.mcaPi && data.mcaRi ? ' | ' : ''}{data.mcaRi ? `RI: ${data.mcaRi}` : ''}
+                  </td>
+                  <td className="p-2 text-right text-emerald-700 font-medium">No cerebral vasodilation</td>
+                </tr>
+              )}
+              {data.dvPi && (
+                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
+                  <td className="p-2 font-medium text-slate-800">Ductus Venosus Pulsatility Index</td>
+                  <td className="p-2 text-slate-700">Forward triphasic waveform</td>
+                  <td className="p-2 font-mono font-bold text-slate-900">PI: {data.dvPi}</td>
+                  <td className="p-2 text-right text-emerald-700 font-medium">Normal cardiac filling</td>
+                </tr>
+              )}
+              {data.ivcPi && (
+                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
+                  <td className="p-2 font-medium text-slate-800">Inferior Vena Cava PI</td>
+                  <td className="p-2 text-slate-700">Systemic venous return index</td>
+                  <td className="p-2 font-mono font-bold text-slate-900">PI: {data.ivcPi}</td>
+                  <td className="p-2 text-right text-emerald-700 font-medium">Physiological</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </section>

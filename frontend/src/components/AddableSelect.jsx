@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Plus, X } from 'lucide-react'
 import { customOptionService } from '../api/customOptionService'
 
-export default function AddableSelect({ field, value, onChange, options = [], className = 'field-control' }) {
+export default function AddableSelect({ field, value, onChange, options = [], className = 'field-control', disabled = false }) {
   const instanceId = useRef(`addable-${field}-${Math.random().toString(36).substring(2, 9)}`).current
   const containerRef = useRef(null)
   const [customOptions, setCustomOptions] = useState([])
@@ -58,6 +58,7 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
   )
 
   const toggleAdding = () => {
+    if (disabled) return
     if (!isAdding) {
       // Notify all other AddableSelect components to close
       window.dispatchEvent(new CustomEvent('addable-select-opened', { detail: { id: instanceId } }))
@@ -92,15 +93,21 @@ export default function AddableSelect({ field, value, onChange, options = [], cl
   return (
     <div ref={containerRef}>
       <div className="flex gap-1">
-        <select className={className} value={value || ''} onChange={(event) => onChange(event.target.value)}>
+        <select
+          disabled={disabled}
+          className={`${className} ${disabled ? 'bg-slate-100 text-slate-500 cursor-not-allowed opacity-80' : ''}`}
+          value={value || ''}
+          onChange={(event) => onChange(event.target.value)}
+        >
           <option value="">Select</option>
           {allOptions.map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
         <button
           type="button"
+          disabled={disabled}
           title={`Add ${field.replaceAll('_', ' ')}`}
           onClick={toggleAdding}
-          className="legacy-plus-button"
+          className={`legacy-plus-button ${disabled ? 'opacity-40 cursor-not-allowed hover:bg-transparent' : ''}`}
         >
           {isAdding ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
         </button>

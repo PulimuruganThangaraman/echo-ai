@@ -22,6 +22,10 @@ const emptyData = (type = 'Adult Echo') => ({
   reportTitle: `${type} Report`,
   indication: '',
   reportType: 'Normal',
+  auditDone: 'No',
+  reportDone: 'No',
+  primaryConsultant: '',
+  secondConsultant: '',
   headerComments: '',
   impression: '',
   imageColumns: '1',
@@ -222,7 +226,11 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
 
   const handleLmpChange = (val) => {
     const errorsToClear = {}
-    if (val) errorsToClear.lmp = ''
+    if (val) {
+      errorsToClear.lmp = ''
+      errorsToClear.edd = ''
+      errorsToClear.etDate = ''
+    }
 
     const lmpDate = parseDateOnly(val)
     let eddVal = data.edd || ''
@@ -251,7 +259,11 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
 
   const handleEddChange = (val) => {
     const errorsToClear = {}
-    if (val) errorsToClear.edd = ''
+    if (val) {
+      errorsToClear.edd = ''
+      errorsToClear.lmp = ''
+      errorsToClear.etDate = ''
+    }
 
     const eddDate = parseDateOnly(val)
     let lmpVal = data.lmp || ''
@@ -292,7 +304,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     const currentVisit = visits.find((v) => String(v.id) === String(visitId))
     const ga = calculateGAFromLmp(lmpVal, currentVisit?.visit_date)
 
-    setErrors((prev) => ({ ...prev, lmp: '', edd: '' }))
+    setErrors((prev) => ({ ...prev, lmp: '', edd: '', etDate: '' }))
     setData((prev) => ({
       ...prev,
       etDate: val,
@@ -317,7 +329,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     const currentVisit = visits.find((v) => String(v.id) === String(visitId))
     const ga = calculateGAFromLmp(lmpVal, currentVisit?.visit_date)
 
-    setErrors((prev) => ({ ...prev, lmp: '', edd: '' }))
+    setErrors((prev) => ({ ...prev, lmp: '', edd: '', etDate: '' }))
     setData((prev) => ({
       ...prev,
       btDate: val,
@@ -337,11 +349,14 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       newErrors.indication = 'Indication is required'
     }
     if (scanType === 'Fetal Echo') {
-      if (!data.lmp || !String(data.lmp).trim()) {
-        newErrors.lmp = 'LMP is required'
-      }
-      if (!data.edd || !String(data.edd).trim()) {
-        newErrors.edd = 'EDD is required'
+      const hasLmp = Boolean(data.lmp && String(data.lmp).trim())
+      const hasEdd = Boolean(data.edd && String(data.edd).trim())
+      const hasEt = Boolean(data.etDate && String(data.etDate).trim())
+      if (!hasLmp && !hasEdd && !hasEt) {
+        const msg = 'At least one: LMP, EDD, or Embryo transfer date is required'
+        newErrors.lmp = msg
+        newErrors.edd = msg
+        newErrors.etDate = msg
       }
     }
 
@@ -360,6 +375,9 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     })
 
     if (checkImpression || activeTab === 'Impression' || activeTab === 'Preview' || data.reportCompleted) {
+      if (!data.primaryConsultant || !String(data.primaryConsultant).trim()) {
+        newErrors.primaryConsultant = 'Primary consultant is required'
+      }
       if (!data.headerComments || !String(data.headerComments).trim()) {
         newErrors.headerComments = 'Header comments are required'
       }
@@ -379,13 +397,13 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     const { checkImpression = false } = options
     const { isValid, errors: validationErrors } = validateReport(checkImpression)
     if (!isValid) {
-      if ((validationErrors.lmp || validationErrors.edd) && scanType === 'Fetal Echo' && activeTab !== 'LMP details') {
+      if ((validationErrors.lmp || validationErrors.edd || validationErrors.etDate) && scanType === 'Fetal Echo' && activeTab !== 'LMP details') {
         setActiveTab('LMP details')
       } else {
         const hasEchoCommentError = Object.keys(validationErrors).some((k) => k.endsWith('Comment'))
         if (hasEchoCommentError && activeTab !== 'Echo details') {
           setActiveTab('Echo details')
-        } else if ((validationErrors.headerComments || validationErrors.impression) && activeTab !== 'Impression') {
+        } else if ((validationErrors.headerComments || validationErrors.impression || validationErrors.primaryConsultant) && activeTab !== 'Impression') {
           setActiveTab('Impression')
         }
       }
@@ -468,7 +486,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       }
     >
       <Section title="Patient and visit" className={`mb-4 ${activeTab === 'Preview' ? 'print:hidden' : ''}`}>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
           <div className="field-label">
             <span>Patient</span>
             <SearchableSelect
@@ -521,6 +539,20 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
             hasError={Boolean(errors.indication)}
             error={errors.indication}
           />
+          <Field
+            label="Audit done"
+            type="select"
+            options={['No', 'Yes']}
+            value={data.auditDone || 'No'}
+            onChange={(val) => setData((prev) => ({ ...prev, auditDone: val }))}
+          />
+          <Field
+            label="Report done"
+            type="select"
+            options={['No', 'Yes']}
+            value={data.reportDone || 'No'}
+            onChange={(val) => setData((prev) => ({ ...prev, reportDone: val }))}
+          />
         </div>
       </Section>
 
@@ -529,7 +561,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       </div>
 
       {activeTab === 'LMP details' && (
-        <Section title="Pregnancy dating">
+        <Section title="Pregnancy dating" description="At least one is required: LMP, EDD, or Embryo transfer date">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Field
               label="LMP *"
@@ -573,6 +605,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
               type="date"
               value={data.etDate}
               onChange={handleEtDateChange}
+              hasError={Boolean(errors.etDate)}
+              error={errors.etDate}
             />
             <Field
               label="Blastocyst transfer date"
@@ -807,16 +841,17 @@ function Impression({ data, setData, doctors, errors = {}, setErrors }) {
 
   const currentReportType = data.reportType || (
     data.abnormal ? 'Abnormal' :
-    data.ambiguity ? 'Ambiguity' :
-    data.growthAbnormality ? 'Growth abnormality' :
+    data.ambiguity ? 'Ambiguous' :
     'Normal'
   )
 
   const handleDetailsDataChange = (updated) => {
     if (updated.reportType !== (data.reportType || currentReportType)) {
       updated.abnormal = updated.reportType === 'Abnormal'
-      updated.ambiguity = updated.reportType === 'Ambiguity'
-      updated.growthAbnormality = updated.reportType === 'Growth abnormality'
+      updated.ambiguity = updated.reportType === 'Ambiguous'
+    }
+    if (updated.primaryConsultant && String(updated.primaryConsultant).trim()) {
+      setErrors?.((prev) => ({ ...prev, primaryConsultant: '' }))
     }
     setData(updated)
   }
@@ -835,6 +870,7 @@ function Impression({ data, setData, doctors, errors = {}, setErrors }) {
           fields={fields}
           data={{ ...data, reportType: currentReportType }}
           setData={handleDetailsDataChange}
+          errors={errors}
         />
       </Section>
       <div className="grid gap-4 lg:grid-cols-2">
