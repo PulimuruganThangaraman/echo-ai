@@ -39,13 +39,6 @@ import {
   COUNTRY_DIAL_CODES,
 } from '../data/locationData'
 
-function getInitials(first, last) {
-  const f = (first || '').trim()[0] || ''
-  const l = (last || '').trim()[0] || ''
-  if (!f && !l) return 'PT'
-  return (f + l).toUpperCase()
-}
-
 function EditPatient() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -83,7 +76,6 @@ function EditPatient() {
   const [formErrors, setFormErrors] = useState({})
   const [visitFormError, setVisitFormError] = useState('')
   const [visits, setVisits] = useState([])
-  const [selectedScans, setSelectedScans] = useState([])
   const [templates, setTemplates] = useState([])
   const [existingScans, setExistingScans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -218,8 +210,6 @@ function EditPatient() {
               String(s.patient_id) === String(patientData.patient_id),
           )
           setExistingScans(patientScans)
-          const scanTypes = Array.from(new Set(patientScans.map((s) => s.scan_type).filter(Boolean)))
-          setSelectedScans(scanTypes)
         }
       })
       .catch((error) => {
@@ -385,12 +375,6 @@ function EditPatient() {
     setVisits(visits.filter((v) => v.id !== visitId))
   }
 
-  const toggleScan = (scanType) => {
-    setSelectedScans((prev) =>
-      prev.includes(scanType) ? prev.filter((s) => s !== scanType) : [...prev, scanType],
-    )
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
     const errors = validatePatientInfo()
@@ -402,10 +386,6 @@ function EditPatient() {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' })
         el.focus?.()
       }
-      return
-    }
-    if (selectedScans.length === 0) {
-      setSubmitError('Please select at least one scan type (Adult Echo, Fetal Echo, or Pediatric Echo) from the List of Scans before updating.')
       return
     }
     setSubmitError('')
@@ -420,32 +400,39 @@ function EditPatient() {
       await patientService.updatePatient(id, payload)
 
       // Save any newly added visits
+      const createdVisits = []
       for (const visit of visits.filter((v) => v.visit_date)) {
         if (visit.isNew || typeof visit.id === 'number') {
           const { id: _vid, isNew, ...visitPayload } = visit
-          await patientService.addVisit(id, visitPayload).catch(() => {})
+          const res = await patientService.addVisit(id, visitPayload).catch(() => null)
+          if (res?.data) createdVisits.push(res.data)
         }
       }
 
-      // Ensure any newly selected scan types are created
-      for (const scanType of selectedScans) {
+      // Collect scan types from visits or existing scans or default to Adult Echo
+      const visitScanTypes = Array.from(new Set(visits.map((v) => v.scan_type).filter(Boolean)))
+      const effectiveScans = visitScanTypes.length > 0 ? visitScanTypes : (existingScans.length > 0 ? existingScans.map((s) => s.scan_type) : ['Adult Echo'])
+
+      // Ensure any newly added scan types are created
+      for (const scanType of effectiveScans) {
         const alreadyHasScan = existingScans.some((s) => s.scan_type === scanType)
         if (!alreadyHasScan) {
           await scanService.createScan({
             patient_id: id,
             patient_display_id: formData.patient_id,
-            visit_id: visits[0]?.id || '',
+            visit_id: visits[0]?.id || createdVisits[0]?.id || '',
             scan_type: scanType,
             status: 'draft',
           }).catch(() => {})
         }
       }
 
-      // Check if user clicked "Go to Scan"
+      // Check if user clicked "Save & Report"
       const shouldGoToScan = e.nativeEvent?.submitter?.value === 'reporting'
       if (shouldGoToScan) {
-        const targetType = selectedScans[0] || 'Adult Echo'
-        navigate(`/echo-studies?type=${encodeURIComponent(targetType)}&patient=${id}`)
+        const targetType = effectiveScans[0] || 'Adult Echo'
+        const targetVisitId = visits[0]?.id || createdVisits[0]?.id || ''
+        navigate(`/echo-studies?type=${encodeURIComponent(targetType)}&patient=${id}&visit=${targetVisitId}`)
       } else {
         navigate('/patients')
       }
@@ -468,7 +455,6 @@ function EditPatient() {
     'w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-100 text-slate-600 text-xs sm:text-sm cursor-not-allowed select-none opacity-80'
   const labelClass = 'block text-xs font-semibold text-slate-700 mb-1.5'
   const dialCode = getDialCode(formData.country)
-  const patientInitials = getInitials(formData.first_name, formData.last_name)
   const fullName = `${formData.salutation || ''} ${formData.first_name || ''} ${formData.last_name || ''}`.trim() || 'Patient'
 
   const getInputClass = (field) =>
@@ -498,7 +484,7 @@ function EditPatient() {
         onSubmit={handleSubmit}
         className="h-full overflow-auto bg-gradient-to-br from-slate-50 to-slate-100 p-2 lg:p-3"
       >
-        <div className="w-full">
+        <div className="w-full space-y-6">
           {/* Top Page Header Bar */}
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-3">
@@ -539,11 +525,7 @@ function EditPatient() {
             </div>
           </div>
 
-          {/* Responsive 4-Column Layout (Matching New Patient Page) */}
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-            {/* Left 3 Columns: Main Form Sections */}
-            <div className="xl:col-span-3 space-y-6">
-              {/* Basic Information Card */}
+          {/* Basic Information Card */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-teal-50 to-white">
                   <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
@@ -1143,7 +1125,7 @@ function EditPatient() {
                               <td className="px-4 py-3 text-slate-700">{displayDate}</td>
                               <td className="px-4 py-3">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                                  {visit.scan_type || visit.visit_type || selectedScans[0] || 'Adult Echo'}
+                                  {visit.scan_type || visit.visit_type || 'Adult Echo'}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-slate-700">
@@ -1168,140 +1150,6 @@ function EditPatient() {
                   </table>
                 </div>
               </div>
-            </div>
-
-            {/* Right Column: Sidebar (List of Scans, Patient Summary & Quick Actions) */}
-            <div className="space-y-4">
-              {/* Quick Patient Profile Summary */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#1e3a8a] text-sm font-bold text-white shadow-2xs">
-                    {patientInitials}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-bold text-slate-900">{fullName}</p>
-                    <p className="font-mono text-xs font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded inline-block mt-0.5">
-                      {formData.patient_id || 'ID Pending'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-2 gap-2 text-[11px]">
-                  <div>
-                    <span className="text-slate-400 font-medium">Age & Sex:</span>
-                    <p className="font-semibold text-slate-700">
-                      {[formData.age ? `${formData.age} ${formData.age_unit || 'Years'}` : '', formData.gender]
-                        .filter(Boolean)
-                        .join(' · ') || '—'}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-medium">City:</span>
-                    <p className="font-semibold text-slate-700 truncate">
-                      {formData.district_city || formData.state || '—'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* List of Scans Card */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-rose-50 to-white flex items-center justify-between">
-                  <h2 className="text-base font-semibold text-slate-900 flex items-center gap-2">
-                    <Activity className="w-4 h-4 text-rose-600" /> List of Scans *
-                  </h2>
-                  {selectedScans.length === 0 ? (
-                    <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                      Required
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                      ✓ {selectedScans.length} Selected
-                    </span>
-                  )}
-                </div>
-                <div className="p-3 space-y-2">
-                  {['Adult Echo', 'Fetal Echo', 'Pediatric Echo'].map((scanType) => (
-                    <div
-                      key={scanType}
-                      role="button"
-                      tabIndex={0}
-                      onDoubleClick={(event) => {
-                        event.preventDefault()
-                        navigate(
-                          `/echo-studies?type=${encodeURIComponent(scanType)}&patient=${id}`,
-                        )
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter')
-                          navigate(
-                            `/echo-studies?type=${encodeURIComponent(scanType)}&patient=${id}`,
-                          )
-                      }}
-                      title={`Double-click to open ${scanType}`}
-                      className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-teal-300 hover:bg-teal-50 group cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedScans.includes(scanType)}
-                        onChange={() => toggleScan(scanType)}
-                        className="w-4 h-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-slate-700 group-hover:text-teal-700">
-                          {scanType}
-                        </span>
-                        <span className="block text-[11px] text-slate-400">
-                          Double-click to open
-                        </span>
-                      </span>
-                    </div>
-                  ))}
-                  {selectedScans.length === 0 && (
-                    <p className="mt-2 text-xs text-rose-600 font-medium bg-rose-50 border border-rose-200 rounded-lg p-2 flex items-center gap-1.5">
-                      ⚠️ Select at least one scan to update patient
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <button
-                  type="button"
-                  onClick={handleAddVisit}
-                  className="w-full px-4 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm text-sm"
-                >
-                  <Plus className="w-4 h-4" /> Add New Visit
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsReferralModalOpen(true)}
-                  title="Click to manage referral doctors and hospitals"
-                  className="w-full px-4 py-3 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg transition flex items-center justify-center gap-2 font-medium text-sm"
-                >
-                  <User className="w-4 h-4" /> Referral Doctor
-                </button>
-
-                <div className="pt-2 border-t border-slate-200">
-                  <button
-                    type="submit"
-                    value="reporting"
-                    disabled={selectedScans.length === 0}
-                    title={selectedScans.length === 0 ? "Please select at least one scan type first" : "Go to Scan"}
-                    className={`w-full px-4 py-3 rounded-lg transition flex items-center justify-center gap-2 font-medium shadow-sm text-sm ${
-                      selectedScans.length === 0
-                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                        : 'bg-slate-800 hover:bg-slate-900 text-white'
-                    }`}
-                  >
-                    <Activity className="w-4 h-4" /> Go to Scan
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Bottom Action Buttons Bar */}
           <div className="mt-6 bg-white rounded-xl shadow-sm border border-slate-200/90 p-3.5 sm:px-6 sm:py-4">
