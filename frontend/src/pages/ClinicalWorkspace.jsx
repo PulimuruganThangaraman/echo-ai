@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CheckCircle2, FileDown, FileText, Mail, Plus, Pr
 import { useSearchParams } from 'react-router-dom'
 import { Field, FieldGrid, Section, Tabs, Workspace } from '../components/WorkspaceUI'
 import SearchableSelect from '../components/SearchableSelect'
+import FetalEchoTemplateReport from '../components/FetalEchoTemplateReport'
 import { patientService } from '../api/patientService'
 import { referralDoctorService } from '../api/referralDoctorService'
 import { workspaceService } from '../api/workspaceService'
@@ -423,7 +424,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
         </>
       }
     >
-      <Section title="Patient and visit" className="mb-4">
+      <Section title="Patient and visit" className={`mb-4 ${activeTab === 'Preview' ? 'print:hidden' : ''}`}>
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="field-label">
             <span>Patient</span>
@@ -578,7 +579,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       {activeTab === 'Referral letter' && <ReferralLetter data={data} setData={setData} doctors={doctors} patient={patient} />}
       {activeTab === 'Preview' && <ReportPreview scanType={scanType} data={{ ...data, ...calculated }} setData={setData} patient={patient} />}
 
-      <div className="mt-6 flex items-center justify-end gap-3">
+      <div className="mt-6 flex items-center justify-end gap-3 print:hidden">
         {currentIndex > 0 && (
           <button
             type="button"
@@ -879,6 +880,10 @@ function ReferralLetter({ data, setData, doctors, patient }) {
 }
 
 function ReportPreview({ scanType, data, setData, patient }) {
+  if (scanType === 'Fetal Echo') {
+    return <FetalEchoTemplateReport data={data} setData={setData} patient={patient} />
+  }
+
   const options = [
     { key: 'reportLayout', label: 'Report layout', type: 'select', options: ['Report only', 'Report with images', 'With biometry graphs'] },
     { key: 'preprinted', label: 'Preprinted stationery', type: 'checkbox' },

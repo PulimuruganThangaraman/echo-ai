@@ -3,22 +3,22 @@ import AddableSelect from './AddableSelect'
 
 export function Workspace({ title, description, actions, children }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm print:border-none print:shadow-none print:rounded-none">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 lg:flex-row lg:items-center lg:justify-between print:hidden">
         <div>
           <h2 className="text-xl font-semibold text-slate-950">{title}</h2>
           {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-5">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto p-5 print:p-0 print:overflow-visible">{children}</div>
     </div>
   )
 }
 
 export function Tabs({ items, value, onChange }) {
   return (
-    <div className="mb-5 flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1">
+    <div className="mb-5 flex gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-1 print:hidden">
       {items.map((item) => (
         <button
           type="button"
