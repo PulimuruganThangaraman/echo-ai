@@ -38,24 +38,60 @@ export default function FetalEchoTemplateReport({
   data = {},
   setData,
   patient,
+  patientId: patientIdProp,
+  patients = [],
   visit,
   doctors = [],
   onNavigateTab,
 }) {
   const [zoom, setZoom] = useState(100)
 
+  // Robust active patient resolution across direct prop or list lookup
+  const activePatient = useMemo(() => {
+    if (patient && (patient.first_name || patient.patient_id)) return patient
+    if (patientIdProp && Array.isArray(patients) && patients.length > 0) {
+      const match = patients.find(
+        (p) => String(p.id) === String(patientIdProp) || String(p.patient_id) === String(patientIdProp)
+      )
+      if (match) return match
+    }
+    return patient || null
+  }, [patient, patientIdProp, patients])
+
   // Patient & Obstetric Demographics
-  const patientFullName = patient
-    ? `${patient.salutation || ''} ${patient.first_name || ''} ${patient.last_name || ''}`.trim()
-    : data.patientName || 'Patient'
-  const patientId = patient?.patient_id || data.patientDisplayId || '—'
-  const patientAge = patient?.age ? `${patient.age} Y` : '—'
-  const patientGender = patient?.gender || 'Female'
-  const patientPhone = patient?.mobile || patient?.phone_1 || '—'
+  const patientFullName = useMemo(() => {
+    if (activePatient) {
+      const salutation = activePatient.salutation ? `${activePatient.salutation} ` : ''
+      const name = `${activePatient.first_name || ''} ${activePatient.last_name || ''}`.replace(/\s+/g, ' ').trim()
+      if (name) return `${salutation}${name}`
+    }
+    return data.patient_name || data.patientName || 'Patient'
+  }, [activePatient, data.patient_name, data.patientName])
+
+  const patientId = useMemo(() => {
+    return activePatient?.patient_id || data.patient_display_id || data.patientDisplayId || patientIdProp || '—'
+  }, [activePatient, data.patient_display_id, data.patientDisplayId, patientIdProp])
+
+  const patientAge = useMemo(() => {
+    const age = activePatient?.age ?? data.age ?? data.patientAge
+    if (age !== undefined && age !== null && age !== '') {
+      return `${age} Y`
+    }
+    return '—'
+  }, [activePatient, data.age, data.patientAge])
+
+  const patientGender = useMemo(() => {
+    const raw = (activePatient?.gender || data.gender || 'Female').trim().toUpperCase()
+    if (raw === 'F' || raw === 'FEMALE') return 'Female'
+    if (raw === 'M' || raw === 'MALE') return 'Male'
+    return activePatient?.gender || 'Female'
+  }, [activePatient, data.gender])
+
+  const patientPhone = activePatient?.mobile || activePatient?.phone_1 || activePatient?.phone1 || '—'
   const patientAddress = useMemo(() => {
-    const parts = [patient?.street, patient?.city, patient?.state].filter(Boolean)
+    const parts = [activePatient?.street, activePatient?.city, activePatient?.state].filter(Boolean)
     return parts.length ? parts.join(', ') : '—'
-  }, [patient])
+  }, [activePatient])
 
   // Visit & Referral details
   const visitDate = visit?.visit_date
@@ -63,11 +99,11 @@ export default function FetalEchoTemplateReport({
     : formatDisplayDate(new Date().toISOString())
   const refDoctorName = useMemo(() => {
     if (visit?.referral_doctor) return visit.referral_doctor
-    if (patient?.referral_doctor) return patient.referral_doctor
-    if (patient?.family_doctor) return patient.family_doctor
+    if (activePatient?.referral_doctor) return activePatient.referral_doctor
+    if (activePatient?.family_doctor) return activePatient.family_doctor
     if (data.signedByLeft) return data.signedByLeft
     return 'Direct Referral / Self'
-  }, [visit, patient, data])
+  }, [visit, activePatient, data])
 
   // LMP & Pregnancy details
   const lmpFormatted = formatDisplayDate(data.lmp)
@@ -81,7 +117,9 @@ export default function FetalEchoTemplateReport({
   }, [data.gaWeeks, data.gaDays, data.ga])
   const datingMethod = data.datingMethod || 'LMP'
   const fetusCount = data.fetuses || 'Single'
-  const indicationText = data.indication || 'Routine prenatal cardiovascular structural screening'
+  const indicationText = useMemo(() => {
+    return data.indication || visit?.notes || visit?.diagnosis || activePatient?.indication || 'Routine prenatal cardiovascular structural screening'
+  }, [data.indication, visit, activePatient])
   const qualityText = data.quality || 'Optimal diagnostic acoustic windows'
 
   // Biometry & RV/LV Ratio
@@ -325,9 +363,9 @@ export default function FetalEchoTemplateReport({
               </div>
               <div>
                 <span className="text-slate-500">Indication:</span>{' '}
-                <span className="font-semibold text-slate-900 bg-amber-50/80 px-1.5 py-0.5 rounded border border-amber-200/70 inline-block">
+                <strong className="font-semibold text-slate-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 inline-block text-xs">
                   {indicationText}
-                </span>
+                </strong>
               </div>
               <div>
                 <span className="text-slate-500">Study Classification:</span>{' '}

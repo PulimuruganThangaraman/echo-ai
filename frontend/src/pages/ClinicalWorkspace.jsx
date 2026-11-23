@@ -118,6 +118,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       .then((result) => {
         const match = (result.data || []).find((report) => report.scan_type === scanType)
         const defaultTitle = `${scanType} Report`
+        const selectedVisit = visits.find((v) => String(v.id) === String(visitId))
         if (match) {
           setReportId(match.id)
           let parsedData = match.data || {}
@@ -128,6 +129,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
           }
           const mergedData = {
             ...emptyData(scanType),
+            indication: parsedData.indication || selectedVisit?.notes || '',
             ...parsedData,
             reportTitle: parsedData.reportTitle || match.report_title || defaultTitle,
             investigationStatus: match.status || parsedData.investigationStatus || 'Draft',
@@ -135,15 +137,46 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
           setData(mergedData)
         } else {
           setReportId('')
-          setData(emptyData(scanType))
+          setData({
+            ...emptyData(scanType),
+            indication: selectedVisit?.notes || '',
+          })
         }
       }).catch(() => {
         setReportId('')
-        setData(emptyData(scanType))
+        const selectedVisit = visits.find((v) => String(v.id) === String(visitId))
+        setData({
+          ...emptyData(scanType),
+          indication: selectedVisit?.notes || '',
+        })
       })
-  }, [patientId, visitId, scanType])
+  }, [patientId, visitId, scanType, visits])
 
-  const patient = patients.find((item) => item.id === patientId)
+  // Sync visit notes into indication if indication is currently blank
+  useEffect(() => {
+    if (visitId && visits.length > 0) {
+      const selectedVisit = visits.find((v) => String(v.id) === String(visitId))
+      if (selectedVisit?.notes) {
+        setData((prev) => {
+          if (!prev.indication) {
+            return { ...prev, indication: selectedVisit.notes }
+          }
+          return prev
+        })
+      }
+    }
+  }, [visitId, visits])
+
+  const patient = useMemo(() => {
+    if (!patientId) return null
+    return (
+      patients.find(
+        (item) =>
+          String(item.id) === String(patientId) ||
+          String(item.patient_id) === String(patientId)
+      ) || null
+    )
+  }, [patients, patientId])
 
   const changeType = (type) => {
     const prevDefault = `${scanType} Report`
@@ -360,11 +393,21 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
     }
     setSaving(true); setSaved(false)
     try {
-      const fullData = { ...data, ...calculated }
+      const resolvedPatientName = patient
+        ? `${patient.salutation ? `${patient.salutation} ` : ''}${patient.first_name || ''} ${patient.last_name || ''}`.replace(/\s+/g, ' ').trim()
+        : (data.patientName || '')
+      const resolvedPatientId = patient?.patient_id || data.patientDisplayId || ''
+      const fullData = {
+        ...data,
+        ...calculated,
+        patientName: resolvedPatientName,
+        patientDisplayId: resolvedPatientId,
+        indication: data.indication || visits.find((v) => String(v.id) === String(visitId))?.notes || '',
+      }
       const payload = {
         patient_id: patientId,
-        patient_display_id: patient?.patient_id || '',
-        patient_name: patient ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : '',
+        patient_display_id: resolvedPatientId,
+        patient_name: resolvedPatientName,
         visit_id: visitId,
         scan_type: scanType,
         report_title: fullData.reportTitle || `${scanType} Report`,
@@ -438,7 +481,18 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
           </div>
           <label className="field-label">
             <span>Visit</span>
-            <select className="field-control" value={visitId} onChange={(e) => setVisitId(e.target.value)}>
+            <select
+              className="field-control"
+              value={visitId}
+              onChange={(e) => {
+                const newVisitId = e.target.value
+                setVisitId(newVisitId)
+                const newVisit = visits.find((v) => String(v.id) === String(newVisitId))
+                if (newVisit?.notes) {
+                  setData((prev) => ({ ...prev, indication: newVisit.notes }))
+                }
+              }}
+            >
               <option value="">Select</option>
               {visits.map((visit) => (
                 <option key={visit.id} value={visit.id}>
@@ -583,6 +637,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
           data={{ ...data, ...calculated }}
           setData={setData}
           patient={patient}
+          patientId={patientId}
+          patients={patients}
           visit={visits.find((v) => String(v.id) === String(visitId))}
           doctors={doctors}
           onNavigateTab={setActiveTab}
@@ -889,13 +945,15 @@ function ReferralLetter({ data, setData, doctors, patient }) {
   )
 }
 
-function ReportPreview({ scanType, data, setData, patient, visit, doctors, onNavigateTab }) {
+function ReportPreview({ scanType, data, setData, patient, patientId, patients, visit, doctors, onNavigateTab }) {
   if (scanType === 'Fetal Echo') {
     return (
       <FetalEchoTemplateReport
         data={data}
         setData={setData}
         patient={patient}
+        patientId={patientId}
+        patients={patients}
         visit={visit}
         doctors={doctors}
         onNavigateTab={onNavigateTab}
