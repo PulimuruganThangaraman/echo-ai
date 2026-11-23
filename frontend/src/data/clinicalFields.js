@@ -10,12 +10,18 @@ export const echoSections = [
       s('situs', 'Situs'),
       s('systemicVenous', 'Systemic venous connection'),
       s('pulmonaryVenous', 'Pulmonary venous connection'),
-      s('atria', 'Right and left atria'),
-      s('interatrialSeptum', 'Interatrial septum'),
-      s('foramenOvale', 'Foramen ovale'),
       s('avConnection', 'Atrio-ventricular connection'),
       s('vaConnection', 'Ventriculo-arterial connection'),
       s('greatArteries', 'Great artery relationship'),
+    ],
+  },
+  {
+    title: 'Atria and septa',
+    fields: [
+      s('atria', 'Atria'),
+      s('interatrialSeptum', 'Interatrial septum'),
+      s('foramenOvale', 'Foramen ovale'),
+      s('interventricularSeptum', 'Interventricular septum'),
     ],
   },
   {
@@ -36,7 +42,6 @@ export const echoSections = [
   {
     title: 'Ventricles and function',
     fields: [
-      s('interventricularSeptum', 'Interventricular septum'),
       s('rightVentricle', 'Right ventricle'),
       s('rvContractility', 'RV contractility'),
       s('leftVentricle', 'Left ventricle'),
@@ -133,7 +138,7 @@ export const impressionFields = [
   t('signedByLeft', 'Report signed by (L)'),
   t('signedByRight', 'Report signed by (R)'),
   s('auditDone', 'Audit done', ['No', 'Yes']),
-  s('reportDone', 'Report done', ['No', 'Yes']),
+  s('reportDone', 'Report done', ['Not completed', 'In progress', 'Completed']),
   t('auditedBy', 'Audited by'),
   t('typedBy', 'Report typed by'),
 ]

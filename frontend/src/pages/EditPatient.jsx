@@ -104,6 +104,7 @@ function EditPatient() {
   const salutations = ['Mr.', 'Mrs.', 'Ms.', 'Dr.', 'Baby', 'Master']
   const maritalStatuses = ['Single', 'Married', 'Divorced', 'Widowed']
   const [referralOptions, setReferralOptions] = useState([
+    'Self',
     'Dr. Arvind Swamy',
     'Dr. Sunita Kulkarni',
     'Dr. Rajesh V. Varma',
@@ -149,7 +150,7 @@ function EditPatient() {
         if (fullName && !list.includes(fullName)) list.push(fullName)
       })
       if (list.length > 0) {
-        setReferralOptions((prev) => Array.from(new Set([...prev, ...list])))
+        setReferralOptions((prev) => Array.from(new Set(['Self', ...prev, ...list])))
       }
     } catch {}
   }, [])
@@ -252,7 +253,18 @@ function EditPatient() {
 
   const validatePatientInfo = () => {
     const errors = {}
-    if (!formData.patient_id?.trim()) errors.patient_id = 'Patient ID is required'
+    if (!formData.patient_id?.trim()) {
+      errors.patient_id = 'Patient ID is required'
+    } else {
+      const pid = formData.patient_id.trim()
+      const isAlphanumeric = /^[a-zA-Z0-9]+$/.test(pid)
+      const hasDigit = /\d/.test(pid)
+      if (!isAlphanumeric) {
+        errors.patient_id = 'Patient ID must be strictly alphanumeric (letters and numbers only, no special characters)'
+      } else if (!hasDigit) {
+        errors.patient_id = 'Patient ID cannot be alphabets only. It must contain numbers (e.g. 1001234 or PAT1001234)'
+      }
+    }
     if (!formData.first_name?.trim()) errors.first_name = 'First Name is required'
     if (!formData.last_name?.trim()) errors.last_name = 'Parent / Spouse Name is required'
     if (!formData.dob?.trim()) errors.dob = 'Date of Birth is required'

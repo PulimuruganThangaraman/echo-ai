@@ -23,7 +23,7 @@ const emptyData = (type = 'Adult Echo') => ({
   indication: '',
   reportType: 'Normal',
   auditDone: 'No',
-  reportDone: 'No',
+  reportDone: 'In progress',
   primaryConsultant: '',
   secondConsultant: '',
   headerComments: '',
@@ -374,7 +374,8 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       })
     })
 
-    if (checkImpression || activeTab === 'Impression' || activeTab === 'Preview' || data.reportCompleted) {
+    const isCompleted = data.reportDone === 'Completed' || data.reportCompleted
+    if (checkImpression || activeTab === 'Impression' || activeTab === 'Preview' || isCompleted) {
       if (!data.primaryConsultant || !String(data.primaryConsultant).trim()) {
         newErrors.primaryConsultant = 'Primary consultant is required'
       }
@@ -383,6 +384,9 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       }
       if (!data.impression || !String(data.impression).trim()) {
         newErrors.impression = 'Final impression is required'
+      }
+      if (isCompleted && Object.keys(newErrors).length > 0) {
+        newErrors.reportDone = 'All mandatory fields and impression must be filled before marking report as Completed'
       }
     }
 
@@ -486,7 +490,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       }
     >
       <Section title="Patient and visit" className={`mb-4 ${activeTab === 'Preview' ? 'print:hidden' : ''}`}>
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-6">
+        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
           <div className="field-label">
             <span>Patient</span>
             <SearchableSelect
@@ -540,18 +544,18 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
             error={errors.indication}
           />
           <Field
-            label="Audit done"
+            label="Type of report"
             type="select"
-            options={['No', 'Yes']}
-            value={data.auditDone || 'No'}
-            onChange={(val) => setData((prev) => ({ ...prev, auditDone: val }))}
-          />
-          <Field
-            label="Report done"
-            type="select"
-            options={['No', 'Yes']}
-            value={data.reportDone || 'No'}
-            onChange={(val) => setData((prev) => ({ ...prev, reportDone: val }))}
+            options={['Normal', 'Abnormal', 'Ambiguous']}
+            value={data.reportType || 'Normal'}
+            onChange={(val) => {
+              setData((prev) => ({
+                ...prev,
+                reportType: val,
+                abnormal: val === 'Abnormal',
+                ambiguity: val === 'Ambiguous',
+              }))
+            }}
           />
         </div>
       </Section>
@@ -849,6 +853,29 @@ function Impression({ data, setData, doctors, errors = {}, setErrors }) {
     if (updated.reportType !== (data.reportType || currentReportType)) {
       updated.abnormal = updated.reportType === 'Abnormal'
       updated.ambiguity = updated.reportType === 'Ambiguous'
+    }
+    if (updated.reportDone === 'Completed') {
+      const isMissingRequired =
+        !updated.indication?.trim() ||
+        !updated.primaryConsultant?.trim() ||
+        !updated.headerComments?.trim() ||
+        !updated.impression?.trim()
+      if (isMissingRequired) {
+        setErrors?.((prev) => ({
+          ...prev,
+          reportDone: 'All mandatory values must be entered before marking report as Completed',
+        }))
+      } else {
+        setErrors?.((prev) => ({ ...prev, reportDone: '' }))
+        updated.reportCompleted = true
+        updated.investigationStatus = 'Completed'
+      }
+    } else {
+      setErrors?.((prev) => ({ ...prev, reportDone: '' }))
+      if (updated.reportDone) {
+        updated.investigationStatus = updated.reportDone
+        updated.reportCompleted = false
+      }
     }
     if (updated.primaryConsultant && String(updated.primaryConsultant).trim()) {
       setErrors?.((prev) => ({ ...prev, primaryConsultant: '' }))

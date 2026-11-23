@@ -48,6 +48,7 @@ export default function Visits() {
   })
 
   const [referralOptions, setReferralOptions] = useState([
+    'Self',
     'Dr. Rajesh V. Varma',
     'Dr. Shalini Reddy',
     'Dr. Anand Patel',
@@ -83,7 +84,7 @@ export default function Visits() {
         if (fullName && !list.includes(fullName)) list.push(fullName)
       })
       if (list.length > 0) {
-        setReferralOptions((prev) => Array.from(new Set([...prev, ...list])))
+        setReferralOptions((prev) => Array.from(new Set(['Self', ...prev, ...list])))
       }
     } catch {}
   }, [])
