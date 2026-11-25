@@ -34,6 +34,15 @@ const demoUsers = [
     email: 'dr.shanthi@echoai.com',
     userName: 'dr.shanthi',
     password: 'password123',
+    initials: 'DS',
+  },
+  {
+    name: 'Priya Sharma',
+    role: 'Front desk assistant',
+    email: 'frontdesk@echoai.com',
+    userName: 'frontdesk',
+    password: 'password123',
+    initials: 'PS',
   },
 ]
 
@@ -417,7 +426,15 @@ function Home() {
     const storage = remember ? localStorage : sessionStorage
     const other = remember ? sessionStorage : localStorage
     other.removeItem('echoai_user')
-    storage.setItem('echoai_user', JSON.stringify({ name: matchedUser.name, role: matchedUser.role, email: matchedUser.email }))
+    storage.setItem(
+      'echoai_user',
+      JSON.stringify({
+        name: matchedUser.name,
+        role: matchedUser.role,
+        email: matchedUser.email,
+        initials: matchedUser.initials || (matchedUser.name.includes('Shanthi') ? 'DS' : 'PS'),
+      })
+    )
     navigate('/dashboard', { replace: true })
   }
 
@@ -518,27 +535,61 @@ function Home() {
             Sign in with Google
           </button>
 
-          {/* ── FOUNDER ACCESS CARD ── */}
-          <div className="mt-4 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3.5">
-            <div className="mb-2.5 flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-blue-600" />
-              <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-700">Founder Access</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => useDemoUser()}
-              className="w-full rounded-xl border border-blue-100 bg-white px-3.5 py-3 text-left shadow-xs transition hover:border-blue-300 hover:shadow-md"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-sm font-bold text-white shadow-sm">
-                  DS
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-[#08145f]">Dr Shanthi · Founder</p>
-                  <p className="text-[11px] text-slate-500">dr.shanthi@echoai.com</p>
-                </div>
+          {/* ── DEMO / QUICK ROLE ACCESS CARDS ── */}
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 to-blue-50/40 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-blue-600" />
+                <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">Quick Role Access</p>
               </div>
-            </button>
+              <span className="text-[10px] text-slate-400 font-medium">1-Click Demo Login</span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {/* Doctor / Founder Card */}
+              <button
+                type="button"
+                onClick={() => useDemoUser(demoUsers[0])}
+                className="w-full rounded-xl border border-blue-100 bg-white px-3 py-2.5 text-left shadow-2xs transition hover:border-blue-300 hover:shadow-xs group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 text-xs font-bold text-white shadow-xs">
+                      DS
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#08145f] group-hover:text-blue-600 transition">Dr Shanthi · Founder</p>
+                      <p className="text-[10px] text-slate-500">dr.shanthi@echoai.com</p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-700 border border-blue-200">
+                    Clinical
+                  </span>
+                </div>
+              </button>
+
+              {/* Front Desk Assistant Card */}
+              <button
+                type="button"
+                onClick={() => useDemoUser(demoUsers[1])}
+                className="w-full rounded-xl border border-emerald-100 bg-white px-3 py-2.5 text-left shadow-2xs transition hover:border-emerald-300 hover:shadow-xs group cursor-pointer"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-teal-500 to-emerald-600 text-xs font-bold text-white shadow-xs">
+                      PS
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-[#08145f] group-hover:text-emerald-700 transition">Priya Sharma · Front Desk</p>
+                      <p className="text-[10px] text-slate-500">frontdesk@echoai.com</p>
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800 border border-emerald-200">
+                    Front Desk
+                  </span>
+                </div>
+              </button>
+            </div>
           </div>
         </aside>
       </div>

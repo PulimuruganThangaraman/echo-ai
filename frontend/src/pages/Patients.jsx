@@ -8,9 +8,12 @@ import {
   Search,
   Trash2,
   ArrowUpDown,
+  Calendar,
+  UserPlus,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
+import { getCurrentUser } from '../api/authService'
 
 const PAGE_SIZE = 10
 const standardDisciplines = ['Adult Echo', 'Fetal Echo', 'Pediatric Echo']
@@ -47,8 +50,16 @@ export default function Patients() {
   const [discipline, setDiscipline] = useState('All disciplines')
   const [page, setPage] = useState(1)
 
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
+
   useEffect(() => {
     fetchPatients()
+  }, [])
+
+  useEffect(() => {
+    const handleUserUpdate = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('echoai_user_updated', handleUserUpdate)
+    return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
   }, [])
 
   useEffect(() => {
@@ -162,28 +173,41 @@ export default function Patients() {
             <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search patients..."
+              placeholder="Search patients by ID, Name, Phone, or Email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10"
             />
           </div>
 
-          {/* Discipline Select */}
-          <div className="relative">
-            <Filter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-            <select
-              aria-label="Discipline filter"
-              value={discipline}
-              onChange={(e) => setDiscipline(e.target.value)}
-              className="h-9 rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 cursor-pointer"
+          <div className="flex items-center gap-2.5">
+            {/* Discipline Select */}
+            <div className="relative">
+              <Filter className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+              <select
+                aria-label="Discipline filter"
+                value={discipline}
+                onChange={(e) => setDiscipline(e.target.value)}
+                className="h-9 rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-xs font-semibold text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 cursor-pointer"
+              >
+                {disciplineOptions.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* New Patient Intake Shortcut Button */}
+            <button
+              type="button"
+              onClick={() => navigate('/patients/new')}
+              className="h-9 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs inline-flex items-center gap-1.5 shadow-xs transition shrink-0 cursor-pointer"
+              title="Register a new patient and assign new patient ID"
             >
-              {disciplineOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              <UserPlus className="h-3.5 w-3.5" />
+              <span>New Patient Intake</span>
+            </button>
           </div>
         </div>
 
@@ -311,23 +335,34 @@ export default function Patients() {
 
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/visits?patient=${patient.id}`)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-bold text-teal-800 hover:bg-teal-100 transition shadow-2xs cursor-pointer"
+                          title="Schedule appointment (Scan or Doctor consultation)"
+                        >
+                          <Calendar className="h-3 w-3 text-teal-600" />
+                          <span>Schedule</span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => navigate(`/patients/${patient.id}/edit`)}
-                          className="rounded-lg border border-emerald-200/80 bg-emerald-50/50 p-1.5 text-emerald-700 hover:bg-emerald-100 transition"
-                          title="Edit Patient"
+                          className="rounded-lg border border-slate-200 bg-white p-1 text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+                          title="Edit Phone, Email & Address"
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(patient.id)}
-                          className="rounded-lg border border-red-200/80 bg-red-50/50 p-1.5 text-red-600 hover:bg-red-100 transition"
-                          title="Delete Patient"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        {!currentUser.isFrontDesk && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(patient.id)}
+                            className="rounded-lg border border-red-200/80 bg-red-50/50 p-1 text-red-600 hover:bg-red-100 transition cursor-pointer"
+                            title="Delete Patient"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

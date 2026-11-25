@@ -15,12 +15,14 @@ import {
   Search,
   Smile,
   Users,
+  UserPlus,
   X,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
 import { scanService } from '../api/scanService'
 import { patientService } from '../api/patientService'
+import { getCurrentUser } from '../api/authService'
 
 const scanRoutes = {
   'Adult Echo': '/adult-echo-report',
@@ -99,6 +101,7 @@ const getClinicalImportance = (scan) => {
 
 export default function Dashboard() {
   const navigate = useNavigate()
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
   const [stats, setStats] = useState({
     total_patients: 101,
     total_scans: 137,
@@ -118,6 +121,12 @@ export default function Dashboard() {
   const [isDateMenuOpen, setIsDateMenuOpen] = useState(false)
   const [recentScans, setRecentScans] = useState([])
   const [isLoadingScans, setIsLoadingScans] = useState(true)
+
+  useEffect(() => {
+    const handleUserUpdate = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('echoai_user_updated', handleUserUpdate)
+    return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
+  }, [])
 
   useEffect(() => {
     Promise.all([
@@ -248,7 +257,7 @@ export default function Dashboard() {
       icon: Heart,
       iconBg: 'bg-[#7c3aed]', // purple
       strokeColor: '#7c3aed',
-      link: '/adult-echo-report',
+      link: currentUser.isFrontDesk ? '/visits' : '/adult-echo-report',
     },
     {
       title: 'FETAL ECHO',
@@ -258,7 +267,7 @@ export default function Dashboard() {
       icon: Baby,
       iconBg: 'bg-[#ec4899]', // pink
       strokeColor: '#ec4899',
-      link: '/fetal-echo-report',
+      link: currentUser.isFrontDesk ? '/visits' : '/fetal-echo-report',
     },
     {
       title: 'PEDIATRIC ECHO',
@@ -268,7 +277,7 @@ export default function Dashboard() {
       icon: Smile,
       iconBg: 'bg-[#f97316]', // orange
       strokeColor: '#f97316',
-      link: '/pediatric-echo-report',
+      link: currentUser.isFrontDesk ? '/visits' : '/pediatric-echo-report',
     },
   ]
 
@@ -376,6 +385,58 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-5 select-none">
+      {/* Front Desk Operations Center Banner */}
+      {currentUser.isFrontDesk && (
+        <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 via-teal-50 to-white p-5 shadow-sm">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">
+                  Front Desk Operations Center
+                </span>
+              </div>
+              <h2 className="text-lg font-bold text-slate-900 mt-1">Patient Intake & Appointment Scheduling Desk</h2>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Register incoming patients with auto-assigned IDs, search existing records, and schedule Scan or Doctor consultation appointments.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate('/patients/new')}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs shadow-xs transition cursor-pointer"
+                title="Register a new patient and assign new patient ID"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span>+ New Patient Intake</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/visits')}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-teal-300 hover:bg-teal-50 text-teal-800 font-semibold text-xs shadow-2xs transition cursor-pointer"
+                title="Schedule an appointment for a scan or doctor"
+              >
+                <CalendarCheck className="h-4 w-4 text-teal-600" />
+                <span>Schedule Appointment</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate('/patients')}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs shadow-2xs transition cursor-pointer"
+                title="Search patient directory"
+              >
+                <Users className="h-4 w-4 text-slate-500" />
+                <span>Search Patients</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 8 Stat Cards Grid (4 columns x 2 rows) */}
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((card) => {
@@ -614,7 +675,13 @@ export default function Dashboard() {
               {top10Scans.map((scan, idx) => (
                 <tr
                   key={scan.id}
-                  onClick={() => navigate(`${scan.scanRoute}/${scan.id}?patientId=${scan.patientId}&visitId=${scan.visitId || ''}&scatter=true`)}
+                  onClick={() => {
+                    if (currentUser.isFrontDesk) {
+                      if (scan.patientId) navigate(`/visits?patient=${scan.patientId}`)
+                      return
+                    }
+                    navigate(`${scan.scanRoute}/${scan.id}?patientId=${scan.patientId}&visitId=${scan.visitId || ''}&scatter=true`)
+                  }}
                   className="group cursor-pointer transition hover:bg-slate-50/80"
                 >
                   {/* Row # */}
@@ -687,22 +754,36 @@ export default function Dashboard() {
                   {/* Action Icon Buttons */}
                   <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => navigate(`${scan.scanRoute}/${scan.id}?patientId=${scan.patientId}`)}
-                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-                        title="View Echo Report"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/visits?patient=${scan.patientId}`)}
-                        className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-                        title="View Patient Details"
-                      >
-                        <FileText className="h-4 w-4" />
-                      </button>
+                      {currentUser.isFrontDesk ? (
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/visits?patient=${scan.patientId}`)}
+                          className="rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-teal-800 hover:bg-teal-100 flex items-center gap-1 text-[11px] font-semibold transition cursor-pointer"
+                          title="Schedule / View Appointments"
+                        >
+                          <Calendar className="h-3.5 w-3.5 text-teal-600" />
+                          <span>Schedule</span>
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`${scan.scanRoute}/${scan.id}?patientId=${scan.patientId}`)}
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                            title="View Echo Report"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/visits?patient=${scan.patientId}`)}
+                            className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                            title="View Patient Details"
+                          >
+                            <FileText className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

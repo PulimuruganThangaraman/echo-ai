@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import {
   Calendar,
+  CalendarCheck,
   CheckCircle2,
   Edit3,
   FileText,
@@ -8,6 +9,11 @@ import {
   Save,
   Trash2,
   UserCheck,
+  Users,
+  UserPlus,
+  X,
+  Stethoscope,
+  Activity,
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -15,6 +21,7 @@ import { patientService } from '../api/patientService'
 import { referralDoctorService } from '../api/referralDoctorService'
 import { scanService } from '../api/scanService'
 import { workspaceService } from '../api/workspaceService'
+import { getCurrentUser } from '../api/authService'
 import ReferralDoctorModal from '../components/ReferralDoctorModal'
 import SearchableSelect from '../components/SearchableSelect'
 
@@ -26,6 +33,7 @@ const getLocalISOString = () => {
 
 export default function Visits() {
   const navigate = useNavigate()
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
   const [searchParams, setSearchParams] = useSearchParams()
   const patientParam =
     searchParams.get('patient') || searchParams.get('patientId') || searchParams.get('patient_id') || ''
@@ -39,13 +47,30 @@ export default function Visits() {
   const [status, setStatus] = useState('')
   const [templates, setTemplates] = useState([])
   const [referralOpen, setReferralOpen] = useState(false)
+  const [appointmentCategory, setAppointmentCategory] = useState('Scan') // 'Scan' | 'Doctor'
+  const [consultantDoctor, setConsultantDoctor] = useState('Dr. Shanthi (Pediatric Cardiologist & Fetal Specialist)')
+
+  const consultantDoctors = [
+    'Dr. Shanthi (Pediatric Cardiologist & Fetal Specialist)',
+    'Dr. Rajesh V. Varma (Senior Consultant Cardiologist)',
+    'Dr. Shalini Reddy (Clinical Cardiologist)',
+    'Dr. Anand Patel (Cardiology Specialist)',
+    'Dr. Priya Sharma (Consultant)',
+  ]
+
   const [visitData, setVisitData] = useState({
     visit_date: getLocalISOString(),
     scan_type: 'Adult Echo',
-    referral_doctor: '',
+    referral_doctor: 'Self',
     report_template_id: '',
     notes: '',
   })
+
+  useEffect(() => {
+    const handleUserUpdate = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('echoai_user_updated', handleUserUpdate)
+    return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
+  }, [])
 
   const [referralOptions, setReferralOptions] = useState([
     'Self',
@@ -286,10 +311,10 @@ export default function Visits() {
     [scans, templates, patients, selectedPatient],
   )
 
-  const addVisit = async (event) => {
-    event.preventDefault()
+  const addVisit = async (event, shouldOpenReport = false) => {
+    if (event?.preventDefault) event.preventDefault()
     if (!selectedPatient) {
-      alert('Please select a patient')
+      alert('Please select a patient before scheduling an appointment')
       return
     }
     const selectedPatientRecord = patients.find((item) => String(item.id) === String(selectedPatient))
@@ -305,8 +330,14 @@ export default function Visits() {
     setStatus('')
     try {
       const selectedTmpl = templates.find((t) => String(t.id) === String(visitData.report_template_id))
-      const determinedScanType =
-        visitData.scan_type || selectedTmpl?.scan_type || defaultScanType || 'Adult Echo'
+      const isDoctorConsult = appointmentCategory === 'Doctor'
+      const determinedScanType = isDoctorConsult
+        ? 'Doctor Consultation'
+        : (visitData.scan_type || selectedTmpl?.scan_type || defaultScanType || 'Adult Echo')
+
+      const combinedNotes = isDoctorConsult
+        ? `Consultant: ${consultantDoctor}. ${visitData.notes || ''}`.trim()
+        : (visitData.notes || '')
 
       const result = await patientService.addVisit(selectedPatient, {
         ...visitData,
@@ -314,48 +345,53 @@ export default function Visits() {
         patient_display_id: selectedPatientRecord.patient_id,
         patient_name: `${selectedPatientRecord.first_name || ''} ${selectedPatientRecord.last_name || ''}`.trim(),
         visit_type: determinedScanType,
-        referral_doctor: visitData.referral_doctor || '',
+        referral_doctor: visitData.referral_doctor || 'Self',
+        notes: combinedNotes,
       })
       const newVisit = result.data
 
-      // Create scan record in scans table
-      try {
-        const scanResult = await scanService.createScan({
-          patient_id: selectedPatient,
-          patient_display_id: selectedPatientRecord.patient_id,
-          visit_id: newVisit.id,
-          scan_type: determinedScanType,
-          status: 'draft',
-          normal: 1,
-        })
-        if (scanResult?.data) {
-          setScans((prev) => [scanResult.data, ...prev])
+      // Create scan record in scans table if it is an echo scan
+      if (!isDoctorConsult) {
+        try {
+          const scanResult = await scanService.createScan({
+            patient_id: selectedPatient,
+            patient_display_id: selectedPatientRecord.patient_id,
+            visit_id: newVisit.id,
+            scan_type: determinedScanType,
+            status: 'draft',
+            normal: 1,
+          })
+          if (scanResult?.data) {
+            setScans((prev) => [scanResult.data, ...prev])
+          }
+        } catch (err) {
+          console.warn('Scan auto-create note:', err)
         }
-      } catch (err) {
-        console.warn('Scan auto-create note:', err)
       }
 
       setVisits([newVisit, ...visits])
       setAllVisits([newVisit, ...allVisits])
       setVisitData({
         visit_date: getLocalISOString(),
-        scan_type: determinedScanType,
-        referral_doctor: visitData.referral_doctor || '',
+        scan_type: isDoctorConsult ? 'Adult Echo' : determinedScanType,
+        referral_doctor: visitData.referral_doctor || 'Self',
         report_template_id: visitData.report_template_id || '',
         notes: '',
       })
       setStatus(
-        `Visit added and linked to ${selectedPatientRecord.patient_id} — ${selectedPatientRecord.first_name || ''} ${selectedPatientRecord.last_name || ''}`.trim()
+        `Appointment scheduled successfully for ${selectedPatientRecord.patient_id} — ${selectedPatientRecord.first_name || ''} ${selectedPatientRecord.last_name || ''} (${determinedScanType})!`
       )
 
-      // Navigate directly to clinical reporting workspace for this patient and new visit
-      navigate(
-        `/echo-studies?patient=${selectedPatient}&visit=${newVisit.id}&type=${encodeURIComponent(
-          determinedScanType
-        )}`
-      )
+      // Only navigate to clinical reporting workspace if requested and user is a Doctor/Clinical user
+      if (shouldOpenReport && !currentUser.isFrontDesk && !isDoctorConsult) {
+        navigate(
+          `/echo-studies?patient=${selectedPatient}&visit=${newVisit.id}&type=${encodeURIComponent(
+            determinedScanType
+          )}`
+        )
+      }
     } catch (error) {
-      alert(error.response?.data?.detail || 'Unable to add visit')
+      alert(error.response?.data?.detail || 'Unable to schedule appointment')
     } finally {
       setSaving(false)
     }
@@ -379,7 +415,49 @@ export default function Visits() {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Top Patient Search & Quick Intake Selector Card */}
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="flex-1 max-w-xl">
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Users className="h-4 w-4 text-teal-600" />
+              <span>Select Patient for Appointment Scheduling</span>
+            </label>
+            <SearchableSelect
+              options={patientOptions}
+              value={selectedPatient}
+              onChange={(val) => selectPatient(val, true)}
+              placeholder="Search patient by ID, name, or phone..."
+              searchPlaceholder="Type patient name, PAT ID, or phone..."
+            />
+          </div>
+
+          <div className="flex items-center gap-2 pt-1 sm:pt-4">
+            <button
+              type="button"
+              onClick={() => navigate('/patients/new')}
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold shadow-xs transition cursor-pointer"
+              title="Register new patient and assign new patient ID"
+            >
+              <UserPlus className="h-4 w-4" />
+              <span>+ New Patient Intake</span>
+            </button>
+
+            {selectedPatient && (
+              <button
+                type="button"
+                onClick={() => selectPatient('', true)}
+                className="inline-flex items-center gap-1 px-3 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-xs font-medium transition cursor-pointer"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Clear Selection</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Patient Info Card */}
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2 bg-slate-50">
@@ -452,18 +530,20 @@ export default function Visits() {
           <div>
             <h2 className="font-semibold text-slate-900 flex items-center gap-2">
               <Calendar className="h-4 w-4 text-teal-600" />
-              <span>Visits ({visits.length})</span>
+              <span>Schedule Appointment & Visits ({visits.length})</span>
             </h2>
-            <p className="text-xs text-slate-500">Add and review clinical visits for the selected patient.</p>
+            <p className="text-xs text-slate-500">
+              Schedule appointments for Echo Scans or Doctor Consultations for new or existing patients.
+            </p>
           </div>
-          {loading && <span className="text-xs font-medium text-teal-700 animate-pulse">Loading visits…</span>}
+          {loading && <span className="text-xs font-medium text-teal-700 animate-pulse">Loading appointments…</span>}
         </div>
 
         {patient ? (
           <div className="flex items-center gap-3 border-b border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900">
             <UserCheck className="h-5 w-5 text-primary-600 shrink-0" />
             <span>
-              New visits will be linked to{' '}
+              Appointment will be scheduled for{' '}
               <strong>
                 {patient.patient_id} — {patient.first_name} {patient.last_name}
               </strong>
@@ -471,7 +551,7 @@ export default function Visits() {
           </div>
         ) : (
           <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Select a patient above before adding a visit.
+            Select or search a patient above before scheduling an appointment.
           </div>
         )}
 
@@ -482,14 +562,46 @@ export default function Visits() {
           </div>
         )}
 
-        {/* Add Visit Form Row: Visit date and time, Scan type, Report template, Referral Doctor / Institute, Visit notes, Add visit button */}
+        {/* Appointment Type Selection Tabs: Echo Scan vs Doctor Consultation */}
+        <div className="bg-slate-50/90 px-4 py-2.5 border-b border-slate-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold text-slate-600 mr-1 uppercase tracking-wider">Appointment For:</span>
+            <button
+              type="button"
+              onClick={() => setAppointmentCategory('Scan')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                appointmentCategory === 'Scan'
+                  ? 'bg-teal-600 text-white shadow-2xs'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Activity className="h-3.5 w-3.5" />
+              <span>Echo Scan (Adult, Fetal, Pediatric)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAppointmentCategory('Doctor')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                appointmentCategory === 'Doctor'
+                  ? 'bg-teal-600 text-white shadow-2xs'
+                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <Stethoscope className="h-3.5 w-3.5" />
+              <span>Doctor Consultation</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Add Visit / Schedule Appointment Form */}
         <form
-          onSubmit={addVisit}
-          className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 xl:grid-cols-[180px_140px_1fr_1.3fr_1fr_auto] md:grid-cols-2 lg:grid-cols-3 grid-cols-1 items-end"
+          onSubmit={(e) => addVisit(e, false)}
+          className="grid gap-3 border-b border-slate-200 bg-slate-50 p-4 xl:grid-cols-[180px_1fr_1fr_1.2fr_1fr_auto] md:grid-cols-2 lg:grid-cols-3 grid-cols-1 items-end"
         >
+          {/* Appointment Date & Time */}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              Visit date and time *
+              Appointment date & time *
             </label>
             <input
               required
@@ -501,73 +613,97 @@ export default function Visits() {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Scan type
-            </label>
-            <select
-              disabled={!patient || saving}
-              className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100"
-              value={visitData.scan_type || defaultScanType}
-              onChange={(e) => {
-                const nextScanType = e.target.value
-                const matchingTmpl = templates.find(
-                  (t) =>
-                    (t.scan_type && t.scan_type.toLowerCase() === nextScanType.toLowerCase()) ||
-                    (t.title && t.title.toLowerCase().includes(nextScanType.toLowerCase())) ||
-                    (t.name && t.name.toLowerCase().includes(nextScanType.toLowerCase()))
-                )
-                setVisitData((prev) => ({
-                  ...prev,
-                  scan_type: nextScanType,
-                  report_template_id: matchingTmpl ? String(matchingTmpl.id) : prev.report_template_id,
-                }))
-              }}
-            >
-              <option value="Adult Echo">Adult Echo</option>
-              <option value="Fetal Echo">Fetal Echo</option>
-              <option value="Pediatric Echo">Pediatric Echo</option>
-            </select>
-          </div>
+          {/* Conditional: Scan Type vs Consultant Doctor */}
+          {appointmentCategory === 'Scan' ? (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Scan type *
+                </label>
+                <select
+                  disabled={!patient || saving}
+                  className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100"
+                  value={visitData.scan_type || defaultScanType}
+                  onChange={(e) => {
+                    const nextScanType = e.target.value
+                    const matchingTmpl = templates.find(
+                      (t) =>
+                        (t.scan_type && t.scan_type.toLowerCase() === nextScanType.toLowerCase()) ||
+                        (t.title && t.title.toLowerCase().includes(nextScanType.toLowerCase())) ||
+                        (t.name && t.name.toLowerCase().includes(nextScanType.toLowerCase()))
+                    )
+                    setVisitData((prev) => ({
+                      ...prev,
+                      scan_type: nextScanType,
+                      report_template_id: matchingTmpl ? String(matchingTmpl.id) : prev.report_template_id,
+                    }))
+                  }}
+                >
+                  <option value="Adult Echo">Adult Echo</option>
+                  <option value="Fetal Echo">Fetal Echo</option>
+                  <option value="Pediatric Echo">Pediatric Echo</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">
-              Report template
-            </label>
-            <select
-              disabled={!patient || saving}
-              className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100"
-              value={visitData.report_template_id}
-              onChange={(e) => {
-                const tmplId = e.target.value
-                const tmpl = templates.find((t) => String(t.id) === String(tmplId))
-                setVisitData((prev) => ({
-                  ...prev,
-                  report_template_id: tmplId,
-                  scan_type: tmpl?.scan_type || prev.scan_type || defaultScanType,
-                }))
-              }}
-            >
-              <option value="">Select template</option>
-              {templates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.title || template.name || template.scan_type}
-                </option>
-              ))}
-            </select>
-          </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                  Report template
+                </label>
+                <select
+                  disabled={!patient || saving}
+                  className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100"
+                  value={visitData.report_template_id}
+                  onChange={(e) => {
+                    const tmplId = e.target.value
+                    const tmpl = templates.find((t) => String(t.id) === String(tmplId))
+                    setVisitData((prev) => ({
+                      ...prev,
+                      report_template_id: tmplId,
+                      scan_type: tmpl?.scan_type || prev.scan_type || defaultScanType,
+                    }))
+                  }}
+                >
+                  <option value="">Select template</option>
+                  {templates.map((template) => (
+                    <option key={template.id} value={template.id}>
+                      {template.title || template.name || template.scan_type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <div className="md:col-span-2">
+              <label className="block text-xs font-medium text-slate-600 mb-1">
+                Consultant Doctor *
+              </label>
+              <select
+                disabled={!patient || saving}
+                className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 disabled:bg-slate-100 font-medium text-slate-800"
+                value={consultantDoctor}
+                onChange={(e) => setConsultantDoctor(e.target.value)}
+              >
+                {consultantDoctors.map((doc) => (
+                  <option key={doc} value={doc}>
+                    {doc}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
-          <div className="min-w-[200px]">
+          {/* Referral Doctor / Institute */}
+          <div className="min-w-[190px]">
             <div className="flex items-center justify-between mb-1">
               <label className="block text-xs font-medium text-slate-600">
-                Referral Doctor / Institute *
+                Referral Doctor / Hospital *
               </label>
               <button
                 type="button"
                 disabled={!patient || saving}
                 onClick={() => setReferralOpen(true)}
-                className="text-[11px] font-semibold text-teal-600 hover:text-teal-800 hover:underline disabled:opacity-40"
-                title="Open Referral Doctors & Hospitals manager"
+                className="text-[11px] font-semibold text-teal-600 hover:text-teal-800 hover:underline disabled:opacity-40 cursor-pointer"
+                title="Manage referral doctors & hospitals"
               >
                 Manage
               </button>
@@ -591,36 +727,65 @@ export default function Visits() {
                 disabled={!patient || saving}
                 onClick={() => setReferralOpen(true)}
                 title="Add or Manage Referral Doctor / Institute"
-                className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 shadow-xs transition disabled:opacity-40"
+                className="h-10 w-10 shrink-0 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white hover:bg-slate-50 active:bg-slate-100 text-slate-700 shadow-xs transition disabled:opacity-40 cursor-pointer"
               >
                 <Plus className="h-4 w-4 text-teal-600" />
               </button>
             </div>
           </div>
 
+          {/* Notes / Reason */}
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              Visit notes
+              {appointmentCategory === 'Doctor' ? 'Reason / Clinical Notes' : 'Visit notes'}
             </label>
             <input
               disabled={!patient || saving}
               type="text"
               className="w-full h-10 px-3 text-sm bg-white border border-slate-300 rounded-lg outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100 placeholder:text-slate-400 disabled:bg-slate-100"
-              placeholder="Visit notes"
+              placeholder={appointmentCategory === 'Doctor' ? 'e.g. Follow-up consultation, murmur evaluation' : 'Visit notes'}
               value={visitData.notes}
               onChange={(e) => setVisitData({ ...visitData, notes: e.target.value })}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={!patient || saving || !visitData.visit_date}
-            title="Add visit and open reporting workspace"
-            className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <FileText className="h-4 w-4" />
-            {saving ? 'Opening report…' : 'Add and go to report'}
-          </button>
+          {/* Action Buttons: Tailored for Front Desk vs Doctor */}
+          {currentUser.isFrontDesk ? (
+            <button
+              type="submit"
+              disabled={!patient || saving || !visitData.visit_date}
+              title="Book and confirm appointment"
+              className="inline-flex items-center justify-center gap-2 h-10 px-5 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              {saving ? 'Scheduling…' : 'Book & Confirm Appointment'}
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => addVisit(e, false)}
+                disabled={!patient || saving || !visitData.visit_date}
+                title="Book appointment without opening reporting workspace"
+                className="inline-flex items-center justify-center gap-1.5 h-10 px-4 text-xs font-semibold text-teal-800 bg-teal-50 border border-teal-300 hover:bg-teal-100 rounded-lg shadow-2xs transition shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              >
+                <CalendarCheck className="h-3.5 w-3.5" />
+                <span>Book Appointment</span>
+              </button>
+              {appointmentCategory === 'Scan' && (
+                <button
+                  type="button"
+                  onClick={(e) => addVisit(e, true)}
+                  disabled={!patient || saving || !visitData.visit_date}
+                  title="Book appointment and immediately open clinical reporting workspace"
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-4 text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg shadow-sm transition shrink-0 whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Book & Open Report</span>
+                </button>
+              )}
+            </div>
+          )}
         </form>
 
         {/* Visits Table */}
@@ -644,6 +809,7 @@ export default function Visits() {
                   <tr
                     key={visit.id || index}
                     onClick={() => {
+                      if (currentUser.isFrontDesk) return
                       const targetType = visitTypes[0] || visitData.scan_type || 'Adult Echo'
                       navigate(
                         `/echo-studies?patient=${selectedPatient}&visit=${visit.id || ''}&type=${encodeURIComponent(
@@ -651,8 +817,8 @@ export default function Visits() {
                         )}`
                       )
                     }}
-                    title="Click to view study and report"
-                    className="cursor-pointer transition hover:bg-teal-50/60"
+                    title={currentUser.isFrontDesk ? `Appointment for ${visit.patient_name || 'patient'}` : 'Click to view study and report'}
+                    className={`${currentUser.isFrontDesk ? 'cursor-default' : 'cursor-pointer hover:bg-teal-50/60'} transition`}
                   >
                     <td>{index + 1}</td>
                     <td>
@@ -665,7 +831,12 @@ export default function Visits() {
                     </td>
                     <td>{visit.visit_date ? new Date(visit.visit_date).toLocaleString() : '-'}</td>
                     <td>
-                      {visitTypes.length > 0 ? (
+                      {visit.visit_type === 'Doctor Consultation' || String(visit.visit_type || '').includes('Consultation') ? (
+                        <span className="rounded-full px-2 py-0.5 text-[10px] font-bold border bg-teal-50 text-teal-800 border-teal-200 inline-flex items-center gap-1">
+                          <Stethoscope className="h-3 w-3 text-teal-600" />
+                          <span>Doctor Consultation</span>
+                        </span>
+                      ) : visitTypes.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {visitTypes.map((st) => (
                             <span

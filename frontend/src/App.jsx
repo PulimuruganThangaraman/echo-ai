@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Navigate, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout'
+import AccessRestricted from './components/AccessRestricted'
 import Dashboard from './pages/Dashboard'
 import Search from './pages/Search'
 import NewPatient from './pages/NewPatient'
@@ -22,6 +23,7 @@ import AdultEchoReport from './pages/AdultEchoReport'
 import PediatricEchoReport from './pages/PediatricEchoReport'
 import EchoScan from './pages/EchoScan'
 import Profile from './pages/Profile'
+import { getCurrentUser } from './api/authService'
 
 function isSignedIn() {
   return Boolean(
@@ -34,6 +36,24 @@ function isSignedIn() {
 function ProtectedPage({ children }) {
   if (!isSignedIn()) {
     return <Navigate to="/" replace />
+  }
+
+  return <Layout>{children}</Layout>
+}
+
+// Clinical routes restricted to Doctors/Cardiologists; Front Desk sees AccessRestricted screen
+function ClinicalPage({ children }) {
+  if (!isSignedIn()) {
+    return <Navigate to="/" replace />
+  }
+
+  const user = getCurrentUser()
+  if (user.isFrontDesk) {
+    return (
+      <Layout>
+        <AccessRestricted />
+      </Layout>
+    )
   }
 
   return <Layout>{children}</Layout>
@@ -88,58 +108,58 @@ function App() {
           <ProtectedPage><EditReferralDoctor /></ProtectedPage>
         } />
         <Route path="/echo-studies" element={
-          <ProtectedPage><ClinicalWorkspace initialType="Adult Echo" /></ProtectedPage>
+          <ClinicalPage><ClinicalWorkspace initialType="Adult Echo" /></ClinicalPage>
         } />
         <Route path="/fetal-echo-report" element={
-          <ProtectedPage><FetalEchoReport /></ProtectedPage>
+          <ClinicalPage><FetalEchoReport /></ClinicalPage>
         } />
         <Route path="/fetal-echo-report/:scanId" element={
-          <ProtectedPage><FetalEchoReport /></ProtectedPage>
+          <ClinicalPage><FetalEchoReport /></ClinicalPage>
         } />
         <Route path="/adult-echo-report" element={
-          <ProtectedPage><AdultEchoReport /></ProtectedPage>
+          <ClinicalPage><AdultEchoReport /></ClinicalPage>
         } />
         <Route path="/adult-echo-report/:scanId" element={
-          <ProtectedPage><AdultEchoReport /></ProtectedPage>
+          <ClinicalPage><AdultEchoReport /></ClinicalPage>
         } />
         <Route path="/pediatric-echo-report" element={
-          <ProtectedPage><PediatricEchoReport /></ProtectedPage>
+          <ClinicalPage><PediatricEchoReport /></ClinicalPage>
         } />
         <Route path="/pediatric-echo-report/:scanId" element={
-          <ProtectedPage><PediatricEchoReport /></ProtectedPage>
+          <ClinicalPage><PediatricEchoReport /></ClinicalPage>
         } />
         <Route path="/echo-scan" element={
-          <ProtectedPage><EchoScan /></ProtectedPage>
+          <ClinicalPage><EchoScan /></ClinicalPage>
         } />
         <Route path="/echo-scan/:scanId" element={
-          <ProtectedPage><EchoScan /></ProtectedPage>
+          <ClinicalPage><EchoScan /></ClinicalPage>
         } />
         <Route path="/images" element={
-          <ProtectedPage><ImagesViewer /></ProtectedPage>
+          <ClinicalPage><ImagesViewer /></ClinicalPage>
         } />
         <Route path="/measurements" element={
-          <ProtectedPage><Measurements /></ProtectedPage>
+          <ClinicalPage><Measurements /></ClinicalPage>
         } />
         <Route path="/ai-assistant" element={
           <Navigate to="/dashboard" replace />
         } />
         <Route path="/reports" element={
-          <ProtectedPage><Reports /></ProtectedPage>
+          <ClinicalPage><Reports /></ClinicalPage>
         } />
         <Route path="/crm" element={
           <Navigate to="/dashboard" replace />
         } />
         <Route path="/analytics" element={
-          <ProtectedPage><Analytics /></ProtectedPage>
+          <ClinicalPage><Analytics /></ClinicalPage>
         } />
         <Route path="/administration" element={
-          <ProtectedPage><Administration /></ProtectedPage>
+          <ClinicalPage><Administration /></ClinicalPage>
         } />
         <Route path="/settings" element={
-          <ProtectedPage><Settings /></ProtectedPage>
+          <ClinicalPage><Settings /></ClinicalPage>
         } />
         <Route path="/profile" element={
-          <ProtectedPage><Profile /></ProtectedPage>
+          <ClinicalPage><Profile /></ClinicalPage>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

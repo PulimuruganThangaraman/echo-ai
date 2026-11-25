@@ -21,6 +21,7 @@ import {
   Stethoscope,
   FileText,
   AlertCircle,
+  CalendarCheck,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
@@ -28,6 +29,7 @@ import { workspaceService } from '../api/workspaceService'
 import { referralDoctorService } from '../api/referralDoctorService'
 import AddableSelect from '../components/AddableSelect'
 import ReferralDoctorModal from '../components/ReferralDoctorModal'
+import { getCurrentUser } from '../api/authService'
 import {
   getStatesForCountry,
   getCitiesForState,
@@ -83,6 +85,13 @@ function EditPatient() {
   const [submitError, setSubmitError] = useState('')
   const [isReferralModalOpen, setIsReferralModalOpen] = useState(false)
   const [zipLookupStatus, setZipLookupStatus] = useState('')
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
+
+  useEffect(() => {
+    const handleUserUpdate = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('echoai_user_updated', handleUserUpdate)
+    return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
+  }, [])
 
   const getInitialVisitDate = () => {
     const now = new Date()
@@ -439,12 +448,15 @@ function EditPatient() {
         }
       }
 
-      // Check if user clicked "Save & Report"
+      // Check if user clicked "Save & Report" or "Save & Schedule Appointment"
       const shouldGoToScan = e.nativeEvent?.submitter?.value === 'reporting'
+      const shouldSchedule = e.nativeEvent?.submitter?.value === 'schedule'
       if (shouldGoToScan) {
         const targetType = effectiveScans[0] || 'Adult Echo'
         const targetVisitId = visits[0]?.id || createdVisits[0]?.id || ''
         navigate(`/echo-studies?type=${encodeURIComponent(targetType)}&patient=${id}&visit=${targetVisitId}`)
+      } else if (shouldSchedule) {
+        navigate(`/visits?patient=${id}`)
       } else {
         navigate('/patients')
       }
@@ -1178,7 +1190,7 @@ function EditPatient() {
               <button
                 type="button"
                 onClick={() => navigate('/patients')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30 cursor-pointer"
               >
                 <X className="w-4 h-4 text-slate-500" />
                 <span>Cancel</span>
@@ -1187,7 +1199,7 @@ function EditPatient() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
               >
                 {isSubmitting ? (
                   <div className="w-4 h-4 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
@@ -1197,20 +1209,40 @@ function EditPatient() {
                 <span>Save</span>
               </button>
 
-              <button
-                type="submit"
-                value="reporting"
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
-              >
-                {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 text-white" />
-                )}
-                <span>Save & Report</span>
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
+              {currentUser.isFrontDesk ? (
+                <button
+                  id="btn-edit-schedule"
+                  type="submit"
+                  value="schedule"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
+                  title="Save patient details and schedule appointment"
+                >
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <CalendarCheck className="w-4 h-4 text-white" />
+                  )}
+                  <span>Save & Schedule Appointment</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </button>
+              ) : (
+                <button
+                  id="btn-edit-reporting"
+                  type="submit"
+                  value="reporting"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 text-white" />
+                  )}
+                  <span>Save & Report</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </button>
+              )}
             </div>
           </div>
         </div>

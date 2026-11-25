@@ -18,6 +18,8 @@ import {
   FileText,
   UserCheck,
   AlertCircle,
+  Sparkles,
+  CalendarCheck,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
 import { scanService } from '../api/scanService'
@@ -25,6 +27,7 @@ import { referralDoctorService } from '../api/referralDoctorService'
 import AddableSelect from '../components/AddableSelect'
 import ReferralDoctorModal from '../components/ReferralDoctorModal'
 import { workspaceService } from '../api/workspaceService'
+import { getCurrentUser } from '../api/authService'
 import {
   getStatesForCountry,
   getCitiesForState,
@@ -77,7 +80,35 @@ function NewPatient() {
   const [isReferralModalOpen, setIsReferralModalOpen] = useState(false)
   const [zipLookupStatus, setZipLookupStatus] = useState('')
   const [showVisitLinkedMsg, setShowVisitLinkedMsg] = useState(false)
+  const [currentUser, setCurrentUser] = useState(getCurrentUser())
   const visitLinkedMsgTimerRef = useRef(null)
+
+  useEffect(() => {
+    const handleUserUpdate = () => setCurrentUser(getCurrentUser())
+    window.addEventListener('echoai_user_updated', handleUserUpdate)
+    return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
+  }, [])
+
+  const handleAutoAssignId = async () => {
+    try {
+      const res = await patientService.getPatients()
+      const list = res.data || []
+      const numericIds = list
+        .map((p) => {
+          const match = String(p.patient_id || '').match(/\d+/)
+          return match ? parseInt(match[0], 10) : 0
+        })
+        .filter((n) => !isNaN(n) && n > 0)
+      const highest = numericIds.length > 0 ? Math.max(...numericIds) : 1001230
+      const nextId = `PAT${highest + 1}`
+      updateFormField('patient_id', nextId)
+      clearFieldError('patient_id')
+    } catch {
+      const fallbackId = `PAT${Date.now().toString().slice(-6)}`
+      updateFormField('patient_id', fallbackId)
+      clearFieldError('patient_id')
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -287,6 +318,7 @@ function NewPatient() {
       return
     }
     const shouldGoToReport = e.nativeEvent.submitter?.value === 'reporting'
+    const shouldSchedule = e.nativeEvent.submitter?.value === 'schedule'
     setSubmitError('')
     setIsSubmitting(true)
     try {
@@ -320,8 +352,10 @@ function NewPatient() {
 
       if (shouldGoToReport) {
         navigate(`/echo-studies?patient=${patient.id}&visit=${createdVisits[0]?.id || ''}&type=${encodeURIComponent(effectiveScans[0] || 'Adult Echo')}`)
+      } else if (shouldSchedule) {
+        navigate(`/visits?patient=${patient.id}`)
       } else {
-        navigate('/search')
+        navigate('/patients')
       }
     } catch (error) {
       console.error('Error creating patient:', error)
@@ -420,7 +454,18 @@ function NewPatient() {
                 <div className="p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <label className={labelClass}>Patient ID *</label>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className={labelClass}>Patient ID *</label>
+                        <button
+                          type="button"
+                          onClick={handleAutoAssignId}
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200/90 px-2 py-0.5 rounded-md transition cursor-pointer"
+                          title="Auto-assign next sequential alphanumeric Patient ID"
+                        >
+                          <Sparkles className="w-3 h-3 text-teal-600" />
+                          <span>Auto-assign ID</span>
+                        </button>
+                      </div>
                       <input
                         id="field-patient_id"
                         type="text"
@@ -988,8 +1033,8 @@ function NewPatient() {
             <div className="flex flex-wrap items-center justify-end gap-2.5">
               <button
                 type="button"
-                onClick={() => navigate('/search')}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30"
+                onClick={() => navigate('/patients')}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium shadow-xs hover:bg-slate-50 hover:border-slate-400 hover:text-slate-900 active:bg-slate-100 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-400/30 cursor-pointer"
               >
                 <X className="w-4 h-4 text-slate-500" />
                 <span>Cancel</span>
@@ -998,31 +1043,50 @@ function NewPatient() {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-teal-600 bg-teal-50/70 text-teal-800 text-sm font-semibold shadow-xs hover:bg-teal-100 hover:border-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
               >
                 {isSubmitting ? (
                   <div className="w-4 h-4 border-2 border-teal-600/30 border-t-teal-600 rounded-full animate-spin" />
                 ) : (
                   <Save className="w-4 h-4 text-teal-700" />
                 )}
-                <span>Save</span>
+                <span>Save Patient</span>
               </button>
 
-              <button
-                id="btn-submit-reporting"
-                type="submit"
-                value="reporting"
-                disabled={isSubmitting}
-                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1"
-              >
-                {isSubmitting ? (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4 text-white" />
-                )}
-                <span>Save & Report</span>
-                <ArrowRight className="w-4 h-4 text-white" />
-              </button>
+              {currentUser.isFrontDesk ? (
+                <button
+                  id="btn-submit-schedule"
+                  type="submit"
+                  value="schedule"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
+                  title="Save patient intake and proceed directly to appointment scheduling"
+                >
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <CalendarCheck className="w-4 h-4 text-white" />
+                  )}
+                  <span>Save & Schedule Appointment</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </button>
+              ) : (
+                <button
+                  id="btn-submit-reporting"
+                  type="submit"
+                  value="reporting"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 active:bg-teal-800 text-white text-sm font-semibold shadow-xs hover:shadow transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 text-white" />
+                  )}
+                  <span>Save & Report</span>
+                  <ArrowRight className="w-4 h-4 text-white" />
+                </button>
+              )}
             </div>
           </div>
         </div>
