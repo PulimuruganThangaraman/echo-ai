@@ -26,6 +26,7 @@ const emptyData = (type = 'Adult Echo') => ({
   reportDone: 'In progress',
   primaryConsultant: '',
   secondConsultant: '',
+  signedByLeft: '',
   headerComments: '',
   impression: '',
   imageColumns: '1',
@@ -379,6 +380,9 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
       if (!data.primaryConsultant || !String(data.primaryConsultant).trim()) {
         newErrors.primaryConsultant = 'Primary consultant is required'
       }
+      if (!data.signedByLeft || !String(data.signedByLeft).trim()) {
+        newErrors.signedByLeft = 'Report signed by (L) is required.'
+      }
       if (!data.headerComments || !String(data.headerComments).trim()) {
         newErrors.headerComments = 'Header comments are required'
       }
@@ -407,7 +411,7 @@ export default function ClinicalWorkspace({ initialType = 'Adult Echo' }) {
         const hasEchoCommentError = Object.keys(validationErrors).some((k) => k.endsWith('Comment'))
         if (hasEchoCommentError && activeTab !== 'Echo details') {
           setActiveTab('Echo details')
-        } else if ((validationErrors.headerComments || validationErrors.impression || validationErrors.primaryConsultant) && activeTab !== 'Impression') {
+        } else if ((validationErrors.headerComments || validationErrors.impression || validationErrors.primaryConsultant || validationErrors.signedByLeft) && activeTab !== 'Impression') {
           setActiveTab('Impression')
         }
       }
@@ -858,6 +862,7 @@ function Impression({ data, setData, doctors, errors = {}, setErrors }) {
       const isMissingRequired =
         !updated.indication?.trim() ||
         !updated.primaryConsultant?.trim() ||
+        !updated.signedByLeft?.trim() ||
         !updated.headerComments?.trim() ||
         !updated.impression?.trim()
       if (isMissingRequired) {
@@ -879,6 +884,9 @@ function Impression({ data, setData, doctors, errors = {}, setErrors }) {
     }
     if (updated.primaryConsultant && String(updated.primaryConsultant).trim()) {
       setErrors?.((prev) => ({ ...prev, primaryConsultant: '' }))
+    }
+    if (updated.signedByLeft && String(updated.signedByLeft).trim()) {
+      setErrors?.((prev) => ({ ...prev, signedByLeft: '' }))
     }
     setData(updated)
   }

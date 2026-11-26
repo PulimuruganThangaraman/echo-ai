@@ -269,6 +269,14 @@ export default function Profile() {
     window.print()
   }
 
+  // =========================================================================
+  // DOCTOR PROFILE PAGE RENDERING TEMPORARILY DISABLED
+  // The entire Doctor Profile page UI is disabled by returning null below.
+  // Original UI components and rendering code are preserved intact for future restoration.
+  // =========================================================================
+  return null
+
+  // eslint-disable-next-line no-unreachable
   return (
     <div className="space-y-6 pb-12 animate-in fade-in duration-200">
       {/* Toast Notification */}

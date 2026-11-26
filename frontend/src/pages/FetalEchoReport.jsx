@@ -20,6 +20,7 @@ import ReportConfigModal from '../components/ReportConfigModal'
 import SearchableSelect from '../components/SearchableSelect'
 import ExistingScansModal from '../components/ExistingScansModal'
 import ReferralLetterModal from '../components/ReferralLetterModal'
+import FetalEchoTemplateReport from '../components/FetalEchoTemplateReport'
 
 const mainTabs = [
   { id: 'scan', label: 'Scan' },
@@ -1167,7 +1168,7 @@ function ImpressionPanel({ report, updateReport }) {
       </div>
 
       <aside className="min-w-0 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-        <ComboWithNew label="Report signed by (L)" value={impression.report_signed_by_l} onChange={(value) => updateReport(['impression', 'report_signed_by_l'], value)} />
+        <ComboWithNew label="Report signed by (L)" value={impression.report_signed_by_l}  onChange={(value) => updateReport(['impression', 'report_signed_by_l'], value)} />
         <ComboWithNew label="Report signed by (R)" value={impression.report_signed_by_r} onChange={(value) => updateReport(['impression', 'report_signed_by_r'], value)} />
         <Fieldset title="Investigation status">
           {[
@@ -1603,7 +1604,14 @@ function PatientHeaderTable({ patient, visitId, visitDate }) {
   )
 }
 
+// NEW 2-PAGE DYNAMIC PDF REPORT TEMPLATE (Replaces static preview with SAMPLE_FETAL_ECHO format)
 function FetalDocumentPages({ report, patient, visitId }) {
+  return <FetalEchoTemplateReport report={report} patient={patient} visitId={visitId} />
+}
+
+// PREVIOUS STATIC FETAL DOCUMENT PAGES (Preserved for reference, disabled)
+function LegacyFetalDocumentPages({ report, patient, visitId }) {
+  return null
   const gen = report.echo_details?.general || {}
   const fc = report.echo_details?.four_chamber || {}
   const ot = report.echo_details?.outflow_tract || {}

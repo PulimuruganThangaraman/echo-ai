@@ -1,276 +1,301 @@
-import { useState, useMemo } from 'react'
-import {
-  Printer,
-  CheckCircle,
-  Calendar,
-  User,
-  Heart,
-  Activity,
-  ShieldCheck,
-  Stethoscope,
-  Edit3,
-  FileCheck,
-  Sparkles,
-  Info
-} from 'lucide-react'
-
-function formatDisplayDate(dateStr) {
-  if (!dateStr) return '—'
-  try {
-    const d = new Date(dateStr)
-    if (isNaN(d.getTime())) return dateStr
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch {
-    return dateStr
-  }
-}
-
-const DEFAULT_NORMAL_IMPRESSION = `1. COMPREHENSIVE FETAL ECHOCARDIOGRAM DEMONSTRATES NORMAL CARDIAC SEGMENTAL ANATOMY.
-2. Normal cardiac position (levocardia), situs solitus, and normal cardiac axis (~43°).
-3. Concordant atrioventricular and ventriculoarterial connections with normal spatial crossover.
-4. Intact interventricular and interatrial septa; physiological patent foramen ovale with right-to-left shunting.
-5. Normal biventricular systolic contractility with balanced chamber dimensions (normal RV/LV ratio).
-6. Normal morphology of all 4 cardiac valves with physiological transvalvular Doppler velocities.
-7. Patent left aortic and ductal arches with normal antegrade forward flow; no coarctation identified.
-8. Normal fetal heart rate with regular sinus rhythm and 1:1 atrioventricular conduction.`
+import React, { useState } from 'react'
+import { Printer, Edit, Eye, CheckCircle2 } from 'lucide-react'
 
 export default function FetalEchoTemplateReport({
   data = {},
   setData,
-  patient,
-  patientId: patientIdProp,
+  patient = null,
+  patientId = '',
   patients = [],
-  visit,
+  visit = null,
+  visitId = '',
   doctors = [],
-  onNavigateTab,
+  onNavigateTab = null,
+  report = null,
 }) {
   const [zoom, setZoom] = useState(100)
 
-  // Robust active patient resolution across direct prop or list lookup
-  const activePatient = useMemo(() => {
-    if (patient && (patient.first_name || patient.patient_id)) return patient
-    if (patientIdProp && Array.isArray(patients) && patients.length > 0) {
-      const match = patients.find(
-        (p) => String(p.id) === String(patientIdProp) || String(p.patient_id) === String(patientIdProp)
-      )
-      if (match) return match
+  // Merge sources: support both ClinicalWorkspace 'data' and FetalEchoReport 'report'
+  const p = patient || (patients && patients.find((item) => String(item.id) === String(patientId))) || data.patient || {}
+  const v = visit || data.visit || {}
+  const d = report || data || {}
+
+  // Helper resolvers
+  const resolve = (...keys) => {
+    for (const key of keys) {
+      if (!key) continue
+      if (typeof key === 'string' && key.includes('.')) {
+        const parts = key.split('.')
+        let cur = d
+        for (const p of parts) {
+          cur = cur?.[p]
+        }
+        if (cur !== undefined && cur !== null && String(cur).trim() !== '') return cur
+      } else if (d[key] !== undefined && d[key] !== null && String(d[key]).trim() !== '') {
+        return d[key]
+      }
     }
-    return patient || null
-  }, [patient, patientIdProp, patients])
+    return ''
+  }
 
-  // Patient & Obstetric Demographics
-  const patientFullName = useMemo(() => {
-    if (activePatient) {
-      const salutation = activePatient.salutation ? `${activePatient.salutation} ` : ''
-      const name = `${activePatient.first_name || ''} ${activePatient.last_name || ''}`.replace(/\s+/g, ' ').trim()
-      if (name) return `${salutation}${name}`
+  // Value formatting helper: empty displays 'Not recorded', never false defaults
+  const fmtValue = (val) => {
+    if (val === undefined || val === null || String(val).trim() === '') {
+      return <span className="text-slate-400 font-normal italic text-[11px]">Not recorded</span>
     }
-    return data.patient_name || data.patientName || 'Patient'
-  }, [activePatient, data.patient_name, data.patientName])
+    return <span className="text-slate-900 font-medium">{String(val)}</span>
+  }
 
-  const patientId = useMemo(() => {
-    return activePatient?.patient_id || data.patient_display_id || data.patientDisplayId || patientIdProp || '—'
-  }, [activePatient, data.patient_display_id, data.patientDisplayId, patientIdProp])
-
-  const patientAge = useMemo(() => {
-    const age = activePatient?.age ?? data.age ?? data.patientAge
-    if (age !== undefined && age !== null && age !== '') {
-      return `${age} Y`
+  // Z-score formatting helper
+  const fmtZ = (val) => {
+    if (val === undefined || val === null || String(val).trim() === '') {
+      return <span className="text-slate-400 italic">—</span>
     }
-    return '—'
-  }, [activePatient, data.age, data.patientAge])
+    return <span className="font-semibold text-slate-800">{String(val)}</span>
+  }
 
-  const patientGender = useMemo(() => {
-    const raw = (activePatient?.gender || data.gender || 'Female').trim().toUpperCase()
-    if (raw === 'F' || raw === 'FEMALE') return 'Female'
-    if (raw === 'M' || raw === 'MALE') return 'Male'
-    return activePatient?.gender || 'Female'
-  }, [activePatient, data.gender])
+  // Comment formatting helper
+  const fmtComment = (val) => {
+    if (!val || String(val).trim() === '') return <span className="text-slate-400 italic text-[11px]">—</span>
+    return <span className="text-slate-700 whitespace-pre-line text-xs">{String(val)}</span>
+  }
 
-  const patientPhone = activePatient?.mobile || activePatient?.phone_1 || activePatient?.phone1 || '—'
-  const patientAddress = useMemo(() => {
-    const parts = [activePatient?.street, activePatient?.city, activePatient?.state].filter(Boolean)
-    return parts.length ? parts.join(', ') : '—'
-  }, [activePatient])
+  // Patient & Visit demographics
+  const rawSalutation = p.salutation || ''
+  const rawName = `${p.first_name || ''} ${p.last_name || ''}`.trim()
+  const patientName = (rawSalutation ? `${rawSalutation} ${rawName}` : rawName) || d.patientName || d.patient_name || '—'
+  const resolvedPatientId = p.patient_id || d.patientDisplayId || d.patient_id || patientId || '—'
+  const age = p.age ? `${p.age} ${p.age_unit || 'Years'}` : (d.age ? `${d.age} Years` : '—')
+  const gender = p.gender || d.gender || '—'
+  const ageSex = `${age} / ${gender}`
+  const visitNo = v.visit_no || v.id || visitId || d.visitNo || d.visit_no || '—'
 
-  // Visit & Referral details
-  const visitDate = visit?.visit_date
-    ? formatDisplayDate(visit.visit_date)
-    : formatDisplayDate(new Date().toISOString())
-  const refDoctorName = useMemo(() => {
-    if (visit?.referral_doctor) return visit.referral_doctor
-    if (activePatient?.referral_doctor) return activePatient.referral_doctor
-    if (activePatient?.family_doctor) return activePatient.family_doctor
-    if (data.signedByLeft) return data.signedByLeft
-    return 'Direct Referral / Self'
-  }, [visit, activePatient, data])
-
-  // LMP & Pregnancy details
-  const lmpFormatted = formatDisplayDate(data.lmp)
-  const eddFormatted = formatDisplayDate(data.edd)
-  const gaFormatted = useMemo(() => {
-    if (data.gaWeeks || data.gaDays) {
-      return `${data.gaWeeks || 0} Weeks${data.gaDays ? ` ${data.gaDays} Days` : ''}`
-    }
-    if (data.ga) return data.ga
-    return '—'
-  }, [data.gaWeeks, data.gaDays, data.ga])
-  const datingMethod = data.datingMethod || 'LMP'
-  const fetusCount = data.fetuses || 'Single'
-  const indicationText = useMemo(() => {
-    return data.indication || visit?.notes || visit?.diagnosis || activePatient?.indication || 'Routine prenatal cardiovascular structural screening'
-  }, [data.indication, visit, activePatient])
-  const qualityText = data.quality || 'Optimal diagnostic acoustic windows'
-
-  // Biometry & RV/LV Ratio
-  const mvVal = parseFloat(data.mvAnnulus || data.mitralValve || 10.2)
-  const tvVal = parseFloat(data.tvAnnulus || data.tricuspidValve || 10.7)
-  const aoVal = parseFloat(data.avAnnulus || data.aorticValve || 6.4)
-  const pvVal = parseFloat(data.pvAnnulus || data.pulmonaryValve || 6.8)
-
-  const mvZ = data.mvAnnulusZScore || data.mitralValveZ || '+0.2'
-  const tvZ = data.tvAnnulusZScore || data.tricuspidValveZ || '+0.4'
-  const aoZ = data.avAnnulusZScore || data.aorticValveZ || '-0.1'
-  const pvZ = data.pvAnnulusZScore || data.pulmonaryValveZ || '+0.1'
-
-  const rvLvRatio = useMemo(() => {
-    if (!isNaN(tvVal) && !isNaN(mvVal) && mvVal > 0) {
-      return (tvVal / mvVal).toFixed(2)
-    }
-    return '1.05'
-  }, [tvVal, mvVal])
-
-  // Doppler velocities
-  const tvE = data.tvE || data.tvPeakVel || '46 cm/s'
-  const tvA = data.tvA || '54 cm/s'
-  const mvE = data.mvE || data.mvPeakVel || '42 cm/s'
-  const mvA = data.mvA || '50 cm/s'
-  const aoVel = data.avVmax || data.lvotPeakVel || '68 cm/s'
-  const pvVel = data.pvVmax || data.rvotPeakVel || '62 cm/s'
-  const ductusVel = data.ductusVmax || data.ductusArteriosusPeakVel || '76 cm/s'
-  const heartRate = data.heartRate || data.fhrRate || '138'
-
-  // Signatures
-  const primaryDoctor = data.primaryConsultant || data.signedByLeft || 'Dr. Shanthi'
-  const secondaryDoctor = data.secondConsultant || data.signedByRight || ''
-  const auditedBy = data.auditedBy || 'Quality Assurance Committee'
-
-  const handleFillStandardNormal = () => {
-    if (setData) {
-      setData((prev) => ({
-        ...prev,
-        cardiacPosition: 'Normal',
-        situs: 'Normal',
-        systemicVenous: 'Normal',
-        pulmonaryVenous: 'Normal',
-        avConnection: 'Normal',
-        vaConnection: 'Normal',
-        greatArteries: 'Normal',
-        atria: 'Normal',
-        interatrialSeptum: 'Normal',
-        foramenOvale: 'Normal',
-        interventricularSeptum: 'Normal',
-        tricuspidValve: 'Normal',
-        mitralValve: 'Normal',
-        aorticValve: 'Normal',
-        pulmonaryValve: 'Normal',
-        rightVentricle: 'Normal',
-        leftVentricle: 'Normal',
-        ascendingAorta: 'Normal',
-        mainPulmonaryArtery: 'Normal',
-        branchPulmonaryArteries: 'Normal',
-        aorticArch: 'Normal',
-        ductusArteriosus: 'Normal',
-        quality: 'Optimal',
-        impression: prev.impression || DEFAULT_NORMAL_IMPRESSION,
-        reportCompleted: true,
-        investigationStatus: 'Completed',
-      }))
+  let visitDate = '—'
+  const rawDate = v.visit_date || d.visitDate || d.visit_date || d.created_at
+  if (rawDate) {
+    try {
+      const parsed = new Date(rawDate)
+      if (!isNaN(parsed.getTime())) {
+        visitDate = parsed.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      } else {
+        visitDate = String(rawDate).split('T')[0]
+      }
+    } catch (e) {
+      visitDate = String(rawDate)
     }
   }
 
-  const handlePrint = () => {
-    window.print()
-  }
+  const referredBy = v.referral_doctor || p.referred_by || p.family_doctor || d.referredBy || d.referral_doctor || 'Self'
 
-  const isAbnormalField = (val) => String(val || '').toLowerCase() === 'abnormal'
+  // Pregnancy / LMP details
+  const lmpDate = resolve('lmp', 'lmp.lmp_date') || '—'
+  const edd = resolve('edd', 'lmp.edd') || '—'
+  const gaWeeks = resolve('gaWeeks', 'ga_weeks')
+  const gaDays = resolve('gaDays', 'ga_days')
+  const ga = gaWeeks !== '' ? `${gaWeeks} Weeks${gaDays !== '' ? ` ${gaDays} Days` : ''}` : (resolve('ga') || '—')
+  const fetusInfo = resolve('fetuses', 'no_of_fetuses', 'lmp.no_of_fetuses') || 'Single'
+  const indication = resolve('indication', 'report.indication') || v.notes || '—'
+
+  // Section 1: Echo Details Subsections
+  const echoPosition = [
+    { label: 'Cardiac Position', val: resolve('cardiacPosition', 'echo_details.general.cardiac_views', 'cardiac_views'), comment: resolve('cardiacPositionComment', 'echo_details.general.cardiac_position_comment') },
+    { label: 'Situs', val: resolve('situs', 'abdominalSitus', 'echo_details.general.situs'), comment: resolve('situsComment', 'echo_details.general.situs_comment') },
+    { label: 'Systemic Venous Connection', val: resolve('systemicVenous', 'echo_details.others.systemic_veins', 'echo_details.others.systemic_venous_return'), comment: resolve('systemicVenousComment') },
+    { label: 'Pulmonary Venous Connection', val: resolve('pulmonaryVenous', 'echo_details.others.pulmonary_veins', 'echo_details.others.pulmonary_venous_return'), comment: resolve('pulmonaryVenousComment') },
+    { label: 'Atrio-ventricular Connection', val: resolve('avConnection', 'echo_details.four_chamber.atrioventricular_junction', 'echo_details.four_chamber.av_junction'), comment: resolve('avConnectionComment') },
+    { label: 'Ventriculo-arterial Connection', val: resolve('vaConnection', 'echo_details.outflow_tract.va_valve_regurgitation', 'echo_details.outflow_tract.outflow_tracts'), comment: resolve('vaConnectionComment') },
+    { label: 'Great Artery Relationship', val: resolve('greatArteries', 'greatArteryRelationship', 'echo_details.outflow_tract.great_artery_relationship'), comment: resolve('greatArteriesComment', 'greatArteryRelationshipComment') },
+  ]
+
+  const echoAtriaSepta = [
+    { label: 'Atria', val: resolve('atria', 'echo_details.four_chamber.atria'), comment: resolve('atriaComment') },
+    { label: 'Interatrial Septum', val: resolve('interatrialSeptum', 'echo_details.four_chamber.interatrial_septum'), comment: resolve('interatrialSeptumComment') },
+    { label: 'Foramen Ovale', val: resolve('foramenOvale', 'echo_details.four_chamber.foramen_ovale'), comment: resolve('foramenOvaleComment') },
+    { label: 'Interventricular Septum', val: resolve('interventricularSeptum', 'echo_details.four_chamber.interventricular_septum'), comment: resolve('interventricularSeptumComment') },
+  ]
+
+  const echoValves = [
+    { label: 'Tricuspid Valve', val: resolve('tricuspidValve', 'echo_details.four_chamber.tricuspid_valve'), comment: resolve('tricuspidValveComment') },
+    { label: 'TR', val: resolve('tricuspidRegurgitation', 'tr'), comment: resolve('tricuspidRegurgitationComment', 'trComment') },
+    { label: 'Mitral Valve', val: resolve('mitralValve', 'echo_details.four_chamber.mitral_valve'), comment: resolve('mitralValveComment') },
+    { label: 'MR', val: resolve('mitralRegurgitation', 'mr'), comment: resolve('mitralRegurgitationComment', 'mrComment') },
+    { label: 'Aortic Valve', val: resolve('aorticValve', 'echo_details.outflow_tract.aortic_valve'), comment: resolve('aorticValveComment') },
+    { label: 'AR', val: resolve('aorticRegurgitation', 'ar'), comment: resolve('aorticRegurgitationComment', 'arComment') },
+    { label: 'AS', val: resolve('aorticStenosis', 'as'), comment: resolve('aorticStenosisComment', 'asComment') },
+    { label: 'Pulmonary Valve', val: resolve('pulmonaryValve', 'echo_details.outflow_tract.pulmonary_valve'), comment: resolve('pulmonaryValveComment') },
+    { label: 'PR', val: resolve('pulmonaryRegurgitation', 'pr'), comment: resolve('pulmonaryRegurgitationComment', 'prComment') },
+    { label: 'PS', val: resolve('pulmonaryStenosis', 'ps'), comment: resolve('pulmonaryStenosisComment', 'psComment') },
+  ]
+
+  const echoVentricles = [
+    { label: 'Right Ventricle', val: resolve('rightVentricle', 'echo_details.four_chamber.right_ventricle'), comment: resolve('rightVentricleComment') },
+    { label: 'RV Contractility', val: resolve('rvContractility'), comment: resolve('rvContractilityComment') },
+    { label: 'Left Ventricle', val: resolve('leftVentricle', 'echo_details.four_chamber.left_ventricle'), comment: resolve('leftVentricleComment') },
+    { label: 'LV Contractility', val: resolve('lvContractility'), comment: resolve('lvContractilityComment') },
+    { label: 'Regional Wall Motion', val: resolve('wallMotion', 'regionalWallMotion'), comment: resolve('wallMotionComment', 'regionalWallMotionComment') },
+    { label: 'Diastolic Function', val: resolve('diastolicFunction'), comment: resolve('diastolicFunctionComment') },
+  ]
+
+  const echoGreatArteries = [
+    { label: 'Great Artery Relationship', val: resolve('greatArteryRelationship', 'greatArteries'), comment: resolve('greatArteryRelationshipComment', 'greatArteriesComment') },
+    { label: 'Ascending Aorta', val: resolve('ascendingAorta'), comment: resolve('ascendingAortaComment') },
+    { label: 'Main Pulmonary Artery', val: resolve('mainPulmonaryArtery', 'echo_details.outflow_tract.main_pulmonary_artery'), comment: resolve('mainPulmonaryArteryComment') },
+    { label: 'Branch Pulmonary Arteries', val: resolve('branchPulmonaryArteries', 'echo_details.outflow_tract.branch_pulmonary_artery', 'echo_details.outflow_tract.branch_pas'), comment: resolve('branchPulmonaryArteriesComment') },
+    { label: 'Coronaries', val: resolve('coronaries'), comment: resolve('coronariesComment') },
+  ]
+
+  const echoArches = [
+    { label: 'Aortic Arch', val: resolve('aorticArch', 'echo_details.outflow_tract.aortic_arch'), comment: resolve('aorticArchComment') },
+    { label: 'Descending Aorta', val: resolve('descendingAorta'), comment: resolve('descendingAortaComment') },
+    { label: 'Ductus Arteriosus', val: resolve('ductusArteriosus', 'echo_details.outflow_tract.ductus_arteriosus'), comment: resolve('ductusArteriosusComment') },
+  ]
+
+  const echoPericardium = [
+    { label: 'Pericardium / Effusion', val: resolve('pericardium', 'echo_details.general.pericardial_effusion'), comment: resolve('pericardiumComment') },
+    { label: 'Pleural Effusion', val: resolve('pleuralEffusion'), comment: resolve('pleuralEffusionComment') },
+  ]
+
+  // Optional/Extended fields if recorded
+  const echoExtended = [
+    { label: 'Abdominal Situs', val: resolve('abdominalSitus', 'echo_details.general.abdominal_situs'), comment: resolve('abdominalSitusComment') },
+    { label: 'Stomach Position', val: resolve('stomach', 'stomachPosition', 'echo_details.general.stomach'), comment: resolve('stomachComment') },
+    { label: 'Heart Size', val: resolve('heartSize', 'echo_details.general.heart_size'), comment: resolve('heartSizeComment') },
+    { label: 'Apex', val: resolve('apex', 'echo_details.general.apex'), comment: resolve('apexComment') },
+    { label: 'Cardiac Axis', val: resolve('cardiacAxis', 'echo_details.general.cardiac_axis'), comment: resolve('cardiacAxisComment') },
+    { label: 'Cardiac Rhythm', val: resolve('rhythm', 'cardiacRhythm', 'echo_details.general.rhythm'), comment: resolve('rhythmComment') },
+    { label: 'FHR', val: resolve('fhr', 'echo_details.general.fhr', 'heartRate'), comment: resolve('fhrComment') },
+    { label: 'AV Conduction', val: resolve('avConduction', 'echo_details.general.av_conduction'), comment: resolve('avConductionComment') },
+    { label: 'Side of Aortic Arch', val: resolve('sideOfArch', 'sideOfAorticArch', 'echo_details.outflow_tract.side_of_arch'), comment: resolve('sideOfArchComment') },
+    { label: '3VV', val: resolve('threeVesselView', 'threeVessel', '3vv', 'echo_details.outflow_tract.three_vessel_view'), comment: resolve('threeVesselComment') },
+    { label: '3VT View', val: resolve('threeVTView', 'threeVT', '3vtView', 'echo_details.outflow_tract.three_vt_view'), comment: resolve('threeVTComment') },
+    { label: 'Other Lesions', val: resolve('otherLesions', 'echo_details.others.other_lesions'), comment: resolve('otherLesionsComment') },
+  ].filter(item => item.val || item.comment)
+
+  const additionalComments = resolve('comments', 'additionalComments', 'echo_details.general.additional_comments')
+  const normalComments = resolve('normalComments', 'defaultNormalComments')
+
+  // Section 2: Biometry Measurements (All 23 fields)
+  const biometryList = [
+    { label: 'BPD (mm)', val: resolve('bpd'), z: resolve('bpdZScore') },
+    { label: 'Head Circumference (mm)', val: resolve('hc'), z: resolve('hcZScore') },
+    { label: 'Abdominal Circumference (mm)', val: resolve('ac'), z: resolve('acZScore') },
+    { label: 'Femur Length (mm)', val: resolve('fl'), z: resolve('flZScore') },
+    { label: 'Estimated Fetal Weight (g)', val: resolve('efw'), z: resolve('efwZScore') },
+    { label: 'Fetal Heart Rate (bpm)', val: resolve('heartRate', 'fhr'), z: resolve('heartRateZScore', 'fhrZScore') },
+    { label: 'Heart Area (cm²)', val: resolve('heartArea'), z: resolve('heartAreaZScore') },
+    { label: 'Thorax Area (cm²)', val: resolve('thoraxArea'), z: resolve('thoraxAreaZScore') },
+    { label: 'Cardiothoracic Ratio', val: resolve('ctRatio', 'biometry.b_mode.cc_tc'), z: resolve('ctRatioZScore') },
+    { label: 'Cardiac Circumference (cm)', val: resolve('cardiacCircumference', 'biometry.b_mode.cardiac_circumference'), z: resolve('cardiacCircumferenceZScore') },
+    { label: 'Thoracic Circumference (cm)', val: resolve('thoracicCircumference', 'biometry.b_mode.thoracic_circumference'), z: resolve('thoracicCircumferenceZScore') },
+    { label: 'Mitral Valve Annulus (mm)', val: resolve('mvAnnulus', 'biometry.b_mode.mitral_valve'), z: resolve('mvAnnulusZScore') },
+    { label: 'Tricuspid Valve Annulus (mm)', val: resolve('tvAnnulus', 'biometry.b_mode.tricuspid_valve'), z: resolve('tvAnnulusZScore') },
+    { label: 'Aortic Valve Annulus (mm)', val: resolve('avAnnulus', 'biometry.b_mode.aortic_valve'), z: resolve('avAnnulusZScore') },
+    { label: 'Pulmonary Valve Annulus (mm)', val: resolve('pvAnnulus', 'biometry.b_mode.pulmonary_valve'), z: resolve('pvAnnulusZScore') },
+    { label: 'Right Atrial Width (mm)', val: resolve('raWidth', 'biometry.b_mode.right_atrial_width'), z: resolve('raWidthZScore') },
+    { label: 'Right Atrial Length (mm)', val: resolve('raLength', 'biometry.b_mode.right_atrial_length'), z: resolve('raLengthZScore') },
+    { label: 'Left Atrial Width (mm)', val: resolve('laWidth', 'biometry.b_mode.left_atrial_width'), z: resolve('laWidthZScore') },
+    { label: 'Left Atrial Length (mm)', val: resolve('laLength', 'biometry.b_mode.left_atrial_length'), z: resolve('laLengthZScore') },
+    { label: 'Right Ventricular Width (mm)', val: resolve('rvWidth', 'biometry.b_mode.right_ventricular_width'), z: resolve('rvWidthZScore') },
+    { label: 'Left Ventricular Width (mm)', val: resolve('lvWidth', 'biometry.b_mode.left_ventricular_width'), z: resolve('lvWidthZScore') },
+    { label: 'Aortic Isthmus (mm)', val: resolve('aorticIsthmus', 'biometry.b_mode.aortic_isthmus'), z: resolve('aorticIsthmusZScore') },
+    { label: 'Ductal Arch (mm)', val: resolve('ductalArch', 'biometry.b_mode.ductus_arteriosus'), z: resolve('ductalArchZScore') },
+  ]
+
+  // Section 3: Doppler Measurements (All 13 fields)
+  const dopplerList = [
+    { label: 'Mitral E (cm/s)', val: resolve('mvE', 'doppler.valves.mitral_e_wave') },
+    { label: 'Mitral A (cm/s)', val: resolve('mvA', 'doppler.valves.mitral_a_wave') },
+    { label: 'Tricuspid E (cm/s)', val: resolve('tvE', 'doppler.valves.tricuspid_e_wave') },
+    { label: 'Tricuspid A (cm/s)', val: resolve('tvA', 'doppler.valves.tricuspid_a_wave') },
+    { label: 'Aortic Valve Vmax (cm/s)', val: resolve('avVmax', 'doppler.valves.aortic_valve_psv') },
+    { label: 'Pulmonary Valve Vmax (cm/s)', val: resolve('pvVmax', 'doppler.valves.pulmonary_valve_psv') },
+    { label: 'Ductus Arteriosus Vmax (cm/s)', val: resolve('ductusVmax', 'doppler.valves.ductus_arteriosus_pi', 'doppler.valves.ductus_arteriosus_peak_velocity') },
+    { label: 'Umbilical Artery PI', val: resolve('umbilicalPi') },
+    { label: 'Umbilical Artery RI', val: resolve('umbilicalRi') },
+    { label: 'Middle Cerebral Artery PI', val: resolve('mcaPi') },
+    { label: 'Middle Cerebral Artery RI', val: resolve('mcaRi') },
+    { label: 'Ductus Venosus PI', val: resolve('dvPi', 'doppler.venous.dv_pi') },
+    { label: 'Inferior Vena Cava PI', val: resolve('ivcPi', 'doppler.venous.inferior_vena_cava_pi') },
+  ]
+
+  // Section 4: Impression Details
+  const reportType = resolve('reportType', 'report_type') || 'Normal'
+  const firstLine = resolve('firstLine', 'first_line') || '—'
+  const primaryConsultant = resolve('primaryConsultant', 'primary_consultant') || 'DR C.SHANTHI'
+  const secondConsultant = resolve('secondConsultant', 'second_consultant') || '—'
+  const signedByLeft = resolve('signedByLeft', 'signed_by_left') || '—'
+  const signedByRight = resolve('signedByRight', 'signed_by_right') || '—'
+  const auditDone = resolve('auditDone', 'audit_done') || 'No'
+  const reportDone = resolve('reportDone', 'report_done') || (d.reportCompleted ? 'Completed' : 'In progress')
+  const auditedBy = resolve('auditedBy', 'audited_by') || '—'
+  const typedBy = resolve('typedBy', 'report_typed_by') || '—'
+
+  const headerComments = resolve('headerComments', 'header_comments')
+  const footerComments = resolve('footerComments', 'footer_comments')
+  const finalImpression = resolve('impression', 'final_impression', 'conclusion') || '—'
+  const recommendations = resolve('recommendations')
+  const disclaimer = resolve('disclaimer', 'disclaimerComments') ||
+    'Limitation of Fetal Echocardiography is to be understood as intention of Fetal Echo is to rule out major cardiac defects and minor or evolving anomalies may not be detected. Sometimes it may not be possible to see certian types of holes or valve problems in fetal life. In addition heart rate/ rhythm problems or heart muscle diseases usually evolve during late gestation when second trimester scan may not show such abnormality.'
+
+  const doctorRegistration = 'PCPNDT registration number PNA / 10047 / 2024.'
 
   return (
-    <div className="w-full flex flex-col items-center py-4 bg-slate-100/80 min-h-screen print:bg-white print:py-0 print:min-h-0">
-      
-      {/* EXECUTIVE SCREEN TOOLBAR (Hidden on Print) */}
-      <div className="w-full max-w-[920px] mb-4 flex flex-wrap items-center justify-between gap-3 bg-white px-5 py-3 rounded-xl border border-slate-200 shadow-sm print:hidden">
+    <div className="w-full bg-slate-100/60 py-4 print:py-0 print:bg-white text-slate-800 font-sans">
+      {/* Dynamic Report Toolbar - Hidden during print */}
+      <div className="no-print mb-4 flex flex-wrap items-center justify-between gap-3 bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700">
-            <Heart className="h-5 w-5 fill-teal-600/20" />
+            <Eye className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-900 leading-tight">
-              Fetal Echocardiogram Document
-            </h2>
-            <p className="text-[11px] text-slate-500 font-medium">
-              Verified Clinical A4 Publication Layout
-            </p>
+            <h2 className="text-sm font-bold text-slate-900 leading-tight">Complete Fetal Echocardiography Report</h2>
+            <p className="text-[11px] text-slate-500">Full Dynamic Multi-Tab Preview &bull; 100% Width Layout</p>
           </div>
-          <span className="ml-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <ShieldCheck className="h-3 w-3" />
-            {data.investigationStatus || 'Final Report'}
-            {data.auditDone === 'Yes' && ' • Audited'}
-            {data.reportDone === 'Yes' && ' • Report Done'}
-          </span>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Zoom Controls */}
-          <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-medium">
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.max(70, z - 10))}
-              className="rounded px-2 py-1 text-slate-600 hover:bg-white hover:text-slate-900 cursor-pointer"
-              title="Zoom out"
-            >
-              Zoom -
-            </button>
-            <span className="px-2 py-1 text-slate-700 font-mono text-[11px]">{zoom}%</span>
-            <button
-              type="button"
-              onClick={() => setZoom((z) => Math.min(130, z + 10))}
-              className="rounded px-2 py-1 text-slate-600 hover:bg-white hover:text-slate-900 cursor-pointer"
-              title="Zoom in"
-            >
-              Zoom +
-            </button>
-          </div>
-
-          {/* Fill Standard Normal Scan */}
-          <button
-            type="button"
-            onClick={handleFillStandardNormal}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 cursor-pointer transition shadow-sm"
-            title="Populate complete reassuring normal anatomical descriptors"
-          >
-            <Sparkles className="h-3.5 w-3.5 text-emerald-600" />
-            Fill Standard Normal
-          </button>
-
-          {/* Jump to Edit */}
+        <div className="flex flex-wrap items-center gap-2">
           {onNavigateTab && (
-            <button
-              type="button"
-              onClick={() => onNavigateTab('Impression')}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 cursor-pointer transition shadow-sm"
-              title="Edit Report Details"
-            >
-              <Edit3 className="h-3.5 w-3.5 text-slate-500" />
-              Edit Details
-            </button>
+            <div className="flex items-center gap-1.5 mr-2">
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Echo details')}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:text-teal-700 transition"
+              >
+                <Edit className="h-3 w-3" />
+                Echo Details
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Biometry')}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:text-teal-700 transition"
+              >
+                <Edit className="h-3 w-3" />
+                Biometry
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Doppler')}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:text-teal-700 transition"
+              >
+                <Edit className="h-3 w-3" />
+                Doppler
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('Impression')}
+                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-white hover:text-teal-700 transition"
+              >
+                <Edit className="h-3 w-3" />
+                Impression
+              </button>
+            </div>
           )}
 
-          {/* Print / Save PDF Button */}
           <button
             type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-bold text-white shadow-sm hover:bg-teal-700 cursor-pointer transition"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-2 rounded-lg bg-teal-600 px-4 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-teal-700 cursor-pointer"
+            title="Print or Save as PDF (Ctrl + P)"
           >
             <Printer className="h-4 w-4" />
             Print / Save as PDF
@@ -278,714 +303,425 @@ export default function FetalEchoTemplateReport({
         </div>
       </div>
 
-      {/* A4 REPORT SHEET */}
+      {/* Main Full-Width Report Sheet */}
       <div
+        className="w-full bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-10 print:p-0 print:border-none print:shadow-none print:rounded-none mx-auto"
         style={{
-          transform: `scale(${zoom / 100})`,
-          transformOrigin: 'top center',
-          transition: 'transform 0.15s ease',
+          boxSizing: 'border-box',
         }}
-        className="w-full max-w-[920px] bg-white border border-slate-200 rounded-xl shadow-lg p-8 sm:p-10 font-sans text-slate-900 leading-normal print:border-none print:shadow-none print:p-0 print:max-w-none print:rounded-none"
       >
-        {/* CLINICAL BRANDING HEADER */}
-        <header className="border-b-2 border-slate-800 pb-4 mb-5 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-primary-800 font-bold tracking-tight text-lg uppercase">
-              <Activity className="h-5 w-5 text-teal-600 stroke-[2.5]" />
-              <span>{data.companyName || 'echoAI'} Fetal Cardiovascular Center</span>
-            </div>
-            <p className="text-[11px] font-semibold text-slate-500 tracking-wider uppercase mt-0.5">
-              Advanced Prenatal Ultrasound & Pediatric Cardiology Unit
-            </p>
-          </div>
-          <div className="text-left sm:text-right">
-            <h1 className="text-xl font-extrabold uppercase tracking-wide text-slate-950 font-serif">
-              {data.reportTitle || 'Fetal Echocardiography Report'}
-            </h1>
-            <p className="text-[11px] text-slate-500 font-medium">
-              Study Date: <strong className="text-slate-800">{visitDate}</strong> • Accredited Study
-            </p>
-          </div>
-        </header>
-
-        {/* COMPREHENSIVE PATIENT & PREGNANCY DEMOGRAPHICS BOX */}
-        <section className="rounded-lg border border-slate-300 bg-slate-50/70 p-4 mb-5 text-xs">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            
-            {/* Column 1: Patient Information */}
-            <div className="space-y-1.5 pr-2 border-b md:border-b-0 md:border-r border-slate-200 pb-3 md:pb-0">
-              <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
-                <User className="h-3.5 w-3.5 text-teal-700" />
-                <span>Patient Demographics</span>
-              </div>
-              <div>
-                <span className="text-slate-500">Name:</span>{' '}
-                <strong className="text-slate-900 text-sm">{patientFullName}</strong>
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-slate-500">MRN / ID:</span>{' '}
-                  <strong className="text-slate-900 font-mono">{patientId}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500">Age:</span>{' '}
-                  <strong className="text-slate-900">{patientAge}</strong>
-                </div>
-              </div>
-              <div>
-                <span className="text-slate-500">Gender:</span>{' '}
-                <span className="text-slate-800 font-medium">{patientGender}</span>
-              </div>
-              {patientPhone !== '—' && (
-                <div>
-                  <span className="text-slate-500">Contact:</span>{' '}
-                  <span className="text-slate-800 font-medium">{patientPhone}</span>
-                </div>
-              )}
-              {patientAddress !== '—' && (
-                <div className="text-[11px] text-slate-500 truncate" title={patientAddress}>
-                  <span>Loc:</span> {patientAddress}
-                </div>
-              )}
-            </div>
-
-            {/* Column 2: Referral & Clinical Study Details */}
-            <div className="space-y-1.5 px-0 md:px-2 border-b md:border-b-0 md:border-r border-slate-200 pb-3 md:pb-0">
-              <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
-                <Stethoscope className="h-3.5 w-3.5 text-teal-700" />
-                <span>Clinical & Referral</span>
-              </div>
-              <div>
-                <span className="text-slate-500">Ref. Doctor:</span>{' '}
-                <strong className="text-slate-900">{refDoctorName}</strong>
-              </div>
-              <div>
-                <span className="text-slate-500">Study Date:</span>{' '}
-                <strong className="text-slate-900">{visitDate}</strong>
-              </div>
-              <div>
-                <span className="text-slate-500">Indication:</span>{' '}
-                <strong className="font-semibold text-slate-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-300 inline-block text-xs">
-                  {indicationText}
-                </strong>
-              </div>
-              <div>
-                <span className="text-slate-500">Study Classification:</span>{' '}
-                <span className={`font-semibold px-1.5 py-0.5 rounded border inline-block ${
-                  data.reportType === 'Abnormal'
-                    ? 'text-rose-900 bg-rose-50 border-rose-200'
-                    : data.reportType === 'Ambiguous'
-                    ? 'text-amber-900 bg-amber-50 border-amber-200'
-                    : 'text-teal-900 bg-teal-50 border-teal-200'
-                }`}>
-                  {data.reportType || 'Normal'}
-                </span>
-              </div>
-              <div>
-                <span className="text-slate-500">Acoustic Window:</span>{' '}
-                <span className="text-slate-800 font-medium">{qualityText}</span>
-              </div>
-            </div>
-
-            {/* Column 3: Gestational Dating & LMP Details (Full Sync) */}
-            <div className="space-y-1.5 pl-0 md:pl-2">
-              <div className="flex items-center gap-1.5 text-slate-600 text-[11px] font-bold uppercase tracking-wider">
-                <Calendar className="h-3.5 w-3.5 text-teal-700" />
-                <span>Gestational Age (LMP Sync)</span>
-              </div>
-              <div className="bg-white p-2 rounded border border-slate-200 space-y-1 shadow-2xs">
-                <div className="flex justify-between items-baseline">
-                  <span className="text-slate-500 text-[11px]">Gestational Age:</span>
-                  <span className="font-extrabold text-sm text-teal-800 font-mono">
-                    {gaFormatted}
-                  </span>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-slate-500 text-[11px]">LMP:</span>
-                  <strong className="text-slate-800 font-mono">{lmpFormatted}</strong>
-                </div>
-                <div className="flex justify-between items-baseline">
-                  <span className="text-slate-500 text-[11px]">EDD:</span>
-                  <strong className="text-slate-800 font-mono">{eddFormatted}</strong>
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-[11.5px] pt-0.5">
-                <div>
-                  <span className="text-slate-500">Dating:</span>{' '}
-                  <span className="font-medium text-slate-800">{datingMethod}</span>
-                </div>
-                <div>
-                  <span className="text-slate-500">Fetus:</span>{' '}
-                  <span className="font-bold text-slate-800">{fetusCount}</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </section>
-
-        {/* HEADER COMMENTS (If Provided) */}
-        {data.headerComments && (
-          <div className="mb-4 rounded-lg bg-blue-50/60 border border-blue-200/80 p-3 text-xs leading-relaxed text-blue-950">
-            <strong className="text-blue-900 block mb-1 uppercase tracking-wide text-[11px]">
-              Clinical Protocol & Header Notes:
-            </strong>
-            <p className="whitespace-pre-line">{data.headerComments}</p>
-          </div>
-        )}
-
-        {/* 1. CARDIAC SITUS, AXIS & POSITION */}
-        <section className="mb-4 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>1. Structure, Cardiac Situs & Spatial Position</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">Plane I</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs">
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="w-1/3 p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Cardiac & Visceral Situs
-                </td>
-                <td className="p-2 text-slate-900">
-                  <span className="font-semibold text-slate-800">Situs Solitus.</span> Normal levocardia with stomach on the left side of the upper abdomen. Normal thoracic visceral arrangement.
-                </td>
-                <td className="w-24 p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Cardiac Position & Axis
-                </td>
-                <td className="p-2 text-slate-900">
-                  Heart situated predominantly in the left hemithorax with apex pointing anteriorly and to the left (Levocardia). Cardiac axis is normal at approximately ~43° to the anteroposterior midline (normal reference 40° - 45°).
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Cardiothoracic Ratio (Area / Size)
-                </td>
-                <td className="p-2 text-slate-900">
-                  Heart occupies approximately one-third of the thoracic area. Normal cardiothoracic circumference and area ratio (ratio &lt; 0.35). No cardiomegaly.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* 2. VENOUS CONNECTIONS & ATRIA */}
-        <section className="mb-4 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>2. Systemic & Pulmonary Venous Return & Atria</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">Plane II</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs">
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="w-1/3 p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Systemic Venous Return
-                </td>
-                <td className="p-2 text-slate-900">
-                  Inferior vena cava (IVC) and Superior vena cava (SVC) drain independently into the right atrium. Ductus venosus visualized with normal antegrade forward a-wave flow.
-                </td>
-                <td className="w-24 p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Pulmonary Venous Return
-                </td>
-                <td className="p-2 text-slate-900">
-                  All 4 pulmonary veins drain into the morphologic left atrium. Individual right and left pulmonary venous insertion orifices visualized without obstruction.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Atrial Chambers & Foramen Ovale
-                </td>
-                <td className="p-2 text-slate-900">
-                  {data.atriaComment || isAbnormalField(data.atria) ? (
-                    <span className="font-semibold text-rose-700">{data.atriaComment || 'Abnormal right and left atria. '}</span>
-                  ) : (
-                    'Right atrium and Left atrium are of normal and balanced proportions. '
-                  )}
-                  {data.interatrialSeptumComment || isAbnormalField(data.interatrialSeptum) ? (
-                    <span className="font-semibold text-rose-700">{data.interatrialSeptumComment || 'Interatrial septum abnormality noted. '}</span>
-                  ) : (
-                    'Interatrial septum is intact '
-                  )}
-                  {data.foramenOvaleComment || isAbnormalField(data.foramenOvale) ? (
-                    <span className="font-semibold text-rose-700">{data.foramenOvaleComment || 'Foramen ovale flap restricted or abnormal.'}</span>
-                  ) : (
-                    'with a patent, physiological foramen ovale flap valve moving actively into the left atrium with physiological right-to-left shunting.'
-                  )}
-                </td>
-                <td className="p-2 text-right">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isAbnormalField(data.atria) || isAbnormalField(data.interatrialSeptum) || isAbnormalField(data.foramenOvale)
-                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}>
-                    {isAbnormalField(data.atria) || isAbnormalField(data.interatrialSeptum) || isAbnormalField(data.foramenOvale) ? 'ABNORMAL' : 'NORMAL'}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* 3. AV JUNCTION, VALVES & VENTRICLES */}
-        <section className="mb-4 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>3. Atrioventricular Junction, Valves & Ventricles (4-Chamber View)</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">Plane III</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs">
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="w-1/3 p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  AV Alignment & Crux
-                </td>
-                <td className="p-2 text-slate-900">
-                  Concordant atrioventricular connections. Normal differential apical offset of the tricuspid valve relative to the mitral valve. Cardiac crux is intact without AV canal defect.
-                </td>
-                <td className="w-24 p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Tricuspid & Mitral Valves
-                </td>
-                <td className="p-2 text-slate-900">
-                  Normal leaflet morphology and unrestricted opening excursion. No valvar regurgitation on Color Doppler interrogation.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Ventricles & Myocardial Function
-                </td>
-                <td className="p-2 text-slate-900">
-                  Symmetric, balanced ventricular chambers. Normal right ventricular apical moderator band. Good global and segmental biventricular systolic contractility.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Interventricular Septum (IVS)
-                </td>
-                <td className="p-2 text-slate-900">
-                  {data.interventricularSeptumComment || isAbnormalField(data.interventricularSeptum) ? (
-                    <span className="font-semibold text-rose-700">{data.interventricularSeptumComment || 'Defect or abnormality noted in interventricular septum.'}</span>
-                  ) : (
-                    'Interventricular septum is intact along both membranous and muscular segments. No ventricular septal defect (VSD) demonstrated on 2D or Color Doppler interrogation.'
-                  )}
-                </td>
-                <td className="p-2 text-right">
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    isAbnormalField(data.interventricularSeptum)
-                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
-                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                  }`}>
-                    {isAbnormalField(data.interventricularSeptum) ? 'ABNORMAL' : 'NORMAL'}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* 4. OUTFLOW TRACTS, GREAT ARTERIES & ARCHES */}
-        <section className="mb-5 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>4. Ventriculoarterial Outflow Tracts, Great Vessels & Arches</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">Plane IV</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs">
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="w-1/3 p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  LVOT & Aortic Valve
-                </td>
-                <td className="p-2 text-slate-900">
-                  Concordant ventriculoarterial connection. Normal left ventricular outflow tract (LVOT) continuity with anterior mitral leaflet and intact membranous septum. Normal aortic valve excursion.
-                </td>
-                <td className="w-24 p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  RVOT & Pulmonary Trunk
-                </td>
-                <td className="p-2 text-slate-900">
-                  Concordant RVOT arising from the morphologic right ventricle, crossing perpendicularly over the aorta. Main pulmonary artery bifurcates normally into right and left branch pulmonary arteries.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-700 bg-slate-50/50 border-r border-slate-200">
-                  Aortic & Ductal Arches (3VT View)
-                </td>
-                <td className="p-2 text-slate-900">
-                  Normal left-sided aortic arch with normal head and neck vessel branching. Ductal arch is widely patent. Three-vessel and trachea (3VT) view demonstrates normal vessel alignment and caliber (PA &gt; Ao &gt; SVC) forming a normal V-sign left of the trachea.
-                </td>
-                <td className="p-2 text-right">
-                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    NORMAL
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* 5. BIOMETRY & Z-SCORE QUANTIFICATION TABLE */}
-        <section className="mb-5 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>5. Fetal Cardiac Biometry & Z-Score Analysis</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">Normative Reference</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs text-left">
-            <thead>
-              <tr className="bg-slate-100 text-slate-800 font-semibold border-b border-slate-200">
-                <th className="p-2">Cardiac Structure / Valve Annulus</th>
-                <th className="p-2">Measured Diameter (mm)</th>
-                <th className="p-2">Expected Mean for GA</th>
-                <th className="p-2">Z-Score Deviation</th>
-                <th className="p-2 text-right">Assessment</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Mitral Valve Annulus (LV)</td>
-                <td className="p-2 font-bold font-mono text-slate-900">{mvVal} mm</td>
-                <td className="p-2 text-slate-500">10.0 mm</td>
-                <td className="p-2 font-mono text-slate-700">{mvZ}</td>
-                <td className="p-2 text-right">
-                  <span className="text-[11px] font-semibold text-emerald-700">Appropriate</span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Tricuspid Valve Annulus (RV)</td>
-                <td className="p-2 font-bold font-mono text-slate-900">{tvVal} mm</td>
-                <td className="p-2 text-slate-500">10.5 mm</td>
-                <td className="p-2 font-mono text-slate-700">{tvZ}</td>
-                <td className="p-2 text-right">
-                  <span className="text-[11px] font-semibold text-emerald-700">Appropriate</span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Aortic Valve Annulus (AoV)</td>
-                <td className="p-2 font-bold font-mono text-slate-900">{aoVal} mm</td>
-                <td className="p-2 text-slate-500">6.3 mm</td>
-                <td className="p-2 font-mono text-slate-700">{aoZ}</td>
-                <td className="p-2 text-right">
-                  <span className="text-[11px] font-semibold text-emerald-700">Appropriate</span>
-                </td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Pulmonary Valve Annulus (PV)</td>
-                <td className="p-2 font-bold font-mono text-slate-900">{pvVal} mm</td>
-                <td className="p-2 text-slate-500">6.7 mm</td>
-                <td className="p-2 font-mono text-slate-700">{pvZ}</td>
-                <td className="p-2 text-right">
-                  <span className="text-[11px] font-semibold text-emerald-700">Appropriate</span>
-                </td>
-              </tr>
-              <tr className="bg-teal-50/60 font-semibold text-teal-950">
-                <td colSpan={2} className="p-2.5">
-                  <span className="text-slate-800">Calculated RV / LV Diameter Ratio</span>{' '}
-                  <span className="text-slate-500 font-normal text-[11px]">(Normal Fetal Range ~1.00 – 1.15):</span>
-                </td>
-                <td colSpan={3} className="p-2.5 text-right">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-teal-100 text-teal-900 font-mono font-bold text-xs border border-teal-300">
-                    {rvLvRatio} (Balanced Ventricles)
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </section>
-
-        {/* 6. PULSED DOPPLER HEMODYNAMIC EVALUATION */}
-        <section className="mb-5 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>6. Pulsed Doppler Flow Pattern & Hemodynamic Analysis</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">cm/sec</span>
-          </div>
-          <table className="w-full border-collapse border border-slate-200 text-xs text-left">
-            <thead>
-              <tr className="bg-slate-100 text-slate-800 font-semibold border-b border-slate-200">
-                <th className="p-2 w-1/3">Interrogation Site</th>
-                <th className="p-2 w-1/3">Flow Pattern / Waveform</th>
-                <th className="p-2">Peak Velocity</th>
-                <th className="p-2 text-right">Hemodynamics</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Tricuspid Inflow (TV)</td>
-                <td className="p-2 text-slate-700">Biphasic (E &lt; A physiological pattern)</td>
-                <td className="p-2 font-mono font-bold text-slate-900">{tvE}</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">Normal forward filling</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Mitral Inflow (MV)</td>
-                <td className="p-2 text-slate-700">Biphasic (E &lt; A physiological pattern)</td>
-                <td className="p-2 font-mono font-bold text-slate-900">{mvE}</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">Normal forward filling</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">LVOT / Ascending Aorta</td>
-                <td className="p-2 text-slate-700">Laminar systolic forward acceleration</td>
-                <td className="p-2 font-mono font-bold text-slate-900">{aoVel}</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">No aortic stenosis</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">RVOT / Pulmonary Trunk</td>
-                <td className="p-2 text-slate-700">Laminar systolic forward acceleration</td>
-                <td className="p-2 font-mono font-bold text-slate-900">{pvVel}</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">No pulmonary stenosis</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Ductus Arteriosus</td>
-                <td className="p-2 text-slate-700">High velocity forward continuous flow</td>
-                <td className="p-2 font-mono font-bold text-slate-900">{ductusVel}</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">Patent ductus</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Ductus Venosus</td>
-                <td className="p-2 text-slate-700">Forward triphasic flow (positive a-wave)</td>
-                <td className="p-2 font-mono font-bold text-slate-900">54 cm/s</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">Normal preload</td>
-              </tr>
-              <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                <td className="p-2 font-medium text-slate-800">Foramen Ovale Shunt</td>
-                <td className="p-2 text-slate-700">Right to Left interatrial shunting</td>
-                <td className="p-2 font-mono font-bold text-slate-900">32 cm/s</td>
-                <td className="p-2 text-right text-emerald-700 font-medium">Physiological</td>
-              </tr>
-              {(data.umbilicalPi || data.umbilicalRi) && (
-                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                  <td className="p-2 font-medium text-slate-800">Umbilical Artery</td>
-                  <td className="p-2 text-slate-700">Forward continuous end-diastolic flow</td>
-                  <td className="p-2 font-mono font-bold text-slate-900">
-                    {data.umbilicalPi ? `PI: ${data.umbilicalPi}` : ''}{data.umbilicalPi && data.umbilicalRi ? ' | ' : ''}{data.umbilicalRi ? `RI: ${data.umbilicalRi}` : ''}
-                  </td>
-                  <td className="p-2 text-right text-emerald-700 font-medium">Placental impedance normal</td>
-                </tr>
-              )}
-              {(data.mcaPi || data.mcaRi) && (
-                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                  <td className="p-2 font-medium text-slate-800">Middle Cerebral Artery (MCA)</td>
-                  <td className="p-2 text-slate-700">High resistance cerebral circulation</td>
-                  <td className="p-2 font-mono font-bold text-slate-900">
-                    {data.mcaPi ? `PI: ${data.mcaPi}` : ''}{data.mcaPi && data.mcaRi ? ' | ' : ''}{data.mcaRi ? `RI: ${data.mcaRi}` : ''}
-                  </td>
-                  <td className="p-2 text-right text-emerald-700 font-medium">No cerebral vasodilation</td>
-                </tr>
-              )}
-              {data.dvPi && (
-                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                  <td className="p-2 font-medium text-slate-800">Ductus Venosus Pulsatility Index</td>
-                  <td className="p-2 text-slate-700">Forward triphasic waveform</td>
-                  <td className="p-2 font-mono font-bold text-slate-900">PI: {data.dvPi}</td>
-                  <td className="p-2 text-right text-emerald-700 font-medium">Normal cardiac filling</td>
-                </tr>
-              )}
-              {data.ivcPi && (
-                <tr className="border-b border-slate-200 hover:bg-slate-50/50">
-                  <td className="p-2 font-medium text-slate-800">Inferior Vena Cava PI</td>
-                  <td className="p-2 text-slate-700">Systemic venous return index</td>
-                  <td className="p-2 font-mono font-bold text-slate-900">PI: {data.ivcPi}</td>
-                  <td className="p-2 text-right text-emerald-700 font-medium">Physiological</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        {/* 7. FETAL HEART RATE & RHYTHM */}
-        <section className="mb-5 avoid-break">
-          <div className="flex items-center justify-between bg-[#1e2d42] text-white font-bold text-xs px-3 py-1.5 rounded-t tracking-wide">
-            <span>7. Fetal Heart Rate, Electrophysiology & Rhythm</span>
-            <span className="text-[10px] font-normal uppercase tracking-wider text-slate-300">1:1 AV Conduction</span>
-          </div>
-          <div className="border border-slate-200 border-t-0 p-3 bg-slate-50/30 flex items-center justify-between text-xs">
-            <div className="space-y-0.5">
-              <div>
-                <span className="text-slate-500">Fetal Heart Rate:</span>{' '}
-                <strong className="text-slate-900 text-sm font-mono">{heartRate} bpm</strong>{' '}
-                <span className="text-emerald-700 font-semibold ml-2">(Normal baseline 120 – 160 bpm)</span>
-              </div>
-              <div className="text-slate-600">
-                Regular sinus rhythm with sustained 1:1 atrioventricular mechanical concordance. No fetal ectopy, extrasystoles, or heart block observed during study.
-              </div>
-            </div>
-            <span className="px-2.5 py-1 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-              REGULAR RHYTHM
-            </span>
-          </div>
-        </section>
-
-        {/* EXECUTIVE CLINICAL IMPRESSION CARD */}
-        <section className="mb-6 avoid-break rounded-xl border-2 border-slate-800 bg-slate-50/90 p-4 sm:p-5 shadow-2xs">
-          <div className="flex items-center justify-between border-b border-slate-300 pb-2 mb-3">
-            <div className="flex items-center gap-2">
-              <FileCheck className="h-5 w-5 text-slate-900" />
-              <h3 className="text-sm font-extrabold uppercase tracking-wide text-slate-950 font-serif">
-                Executive Clinical Impression
-              </h3>
-            </div>
-            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
-              REASSURING STUDY
-            </span>
-          </div>
-
-          <div className="text-xs leading-relaxed font-medium text-slate-900 whitespace-pre-line space-y-1">
-            {data.impression || DEFAULT_NORMAL_IMPRESSION}
-          </div>
-
-          {/* Recommendations Block */}
-          {data.recommendations && (
-            <div className="mt-4 pt-3 border-t border-slate-300 text-xs">
-              <strong className="text-slate-900 uppercase tracking-wide text-[11px] block mb-1">
-                Clinical Recommendations & Follow-Up:
-              </strong>
-              <p className="text-slate-700 whitespace-pre-line">{data.recommendations}</p>
-            </div>
-          )}
-
-          {/* Footer Comments */}
-          {data.footerComments && (
-            <div className="mt-3 pt-2 border-t border-slate-200 text-[11px] text-slate-600 italic">
-              {data.footerComments}
-            </div>
-          )}
-        </section>
-
-        {/* SIGNATURES & VALIDATION BLOCK */}
-        <footer className="mt-8 pt-4 border-t border-slate-300 text-xs avoid-break">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 mb-4">
-            
-            {/* Primary Consultant Signature */}
-            <div>
-              <div className="h-12 flex items-end">
-                <span
-                  style={{
-                    fontFamily: "'Brush Script MT', 'Dancing Script', cursive, sans-serif",
-                    fontSize: '2rem',
-                    color: '#1e293b',
-                    display: 'inline-block',
-                    transform: 'rotate(-2deg)',
-                  }}
-                >
-                  {primaryDoctor}
-                </span>
-              </div>
-              <div className="border-t border-slate-400 pt-1 mt-1">
-                <div className="font-bold text-slate-900 uppercase text-[11px]">
-                  {primaryDoctor}
-                </div>
-                <div className="text-[10px] text-slate-600 font-medium">
-                  Consultant Cardiologist & Fetal Imaging Specialist
-                </div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  MCI / Reg. No: KMC-48291 • echoAI Clinical Diagnostics
-                </div>
-              </div>
-            </div>
-
-            {/* Audit / Second Consultant */}
-            <div className="sm:text-right">
-              <div className="h-12 flex items-end sm:justify-end">
-                {secondaryDoctor ? (
-                  <span
-                    style={{
-                      fontFamily: "'Brush Script MT', 'Dancing Script', cursive, sans-serif",
-                      fontSize: '1.8rem',
-                      color: '#1e293b',
-                    }}
-                  >
-                    {secondaryDoctor}
-                  </span>
-                ) : (
-                  <span className="text-[11px] text-slate-400 italic">Digitally Verified & Validated</span>
-                )}
-              </div>
-              <div className="border-t border-slate-400 pt-1 mt-1">
-                <div className="font-bold text-slate-900 uppercase text-[11px]">
-                  {secondaryDoctor || auditedBy}
-                </div>
-                <div className="text-[10px] text-slate-600 font-medium">
-                  Clinical Audit & Quality Assurance Stamp
-                </div>
-                <div className="text-[10px] text-slate-500 font-mono">
-                  Report ID: {data.reportId || visit?.id || 'REP-ECHO-2026-F'}
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-          {/* Statutory PCPNDT & Clinical Disclaimer */}
-          <div className="mt-4 pt-3 border-t border-slate-200 text-[10px] leading-normal text-slate-500 text-justify">
-            <strong className="text-slate-700">Notice under Pre-Conception and Pre-Natal Diagnostic Techniques (PCPNDT) Act:</strong>{' '}
-            Sex determination of fetus is strictly prohibited by law and is not performed. Fetal echocardiography evaluates structural cardiac anatomy, rhythm, and hemodynamic function. Minor evolving lesions (e.g. small VSDs, mild semilunar valve dysplasia, coarctation evolving after birth, or secondary valve changes) may not be detectable in prenatal life due to physiological fetal circulatory shunts.
-          </div>
-        </footer>
-
-        {/* BOTTOM ACTION BUTTON: Screen only */}
-        <div className="mt-8 pt-4 border-t border-slate-200 flex justify-center print:hidden">
-          <button
-            type="button"
-            onClick={handlePrint}
-            className="inline-flex items-center gap-2.5 rounded-xl bg-[#1e2d42] px-8 py-3 text-xs font-bold uppercase tracking-wider text-white shadow-md hover:bg-slate-800 cursor-pointer transition transform hover:-translate-y-0.5 active:translate-y-0"
-          >
-            <Printer className="h-4 w-4" />
-            Print / Save Final Report as PDF
-          </button>
+        {/* REPORT TITLE */}
+        <div className="border-b-2 border-slate-900 pb-3 mb-6 text-center">
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-950 uppercase">
+            Fetal Echocardiography Report
+          </h1>
+          <p className="text-xs text-slate-500 font-medium tracking-wide mt-1">
+            CLINICAL CARDIOVASCULAR ASSESSMENT &bull; COMPREHENSIVE MULTI-PARAMETRIC EVALUATION
+          </p>
         </div>
 
+        {/* PATIENT & PREGNANCY INFORMATION BOX */}
+        <div className="mb-8 rounded-lg border border-slate-300 bg-slate-50/60 p-4 sm:p-5 avoid-break">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2.5 text-xs sm:text-sm">
+            {/* Left Column: Patient & Visit */}
+            <div className="space-y-1.5 border-b md:border-b-0 md:border-r border-slate-200 pb-3 md:pb-0 md:pr-6">
+              <div className="text-[11px] font-bold text-teal-800 uppercase tracking-wider mb-1">
+                Patient & Visit Identification
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Patient Name:</span>
+                <span className="font-bold text-slate-900 uppercase">{patientName}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Patient ID:</span>
+                <span className="font-mono font-medium text-slate-900">{resolvedPatientId}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Age / Gender:</span>
+                <span className="text-slate-900">{ageSex}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Visit Number:</span>
+                <span className="text-slate-900">{visitNo}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Visit Date:</span>
+                <span className="font-medium text-slate-900">{visitDate}</span>
+              </div>
+              <div className="grid grid-cols-[120px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Referring Doctor:</span>
+                <span className="font-medium text-slate-900">{referredBy}</span>
+              </div>
+            </div>
+
+            {/* Right Column: Pregnancy / LMP */}
+            <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-teal-800 uppercase tracking-wider mb-1">
+                Pregnancy & Gestational Information
+              </div>
+              <div className="grid grid-cols-[130px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">LMP Date:</span>
+                <span className="font-medium text-slate-900">{lmpDate}</span>
+              </div>
+              <div className="grid grid-cols-[130px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">EDD:</span>
+                <span className="font-medium text-slate-900">{edd}</span>
+              </div>
+              <div className="grid grid-cols-[130px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Gestational Age:</span>
+                <span className="font-bold text-slate-900">{ga}</span>
+              </div>
+              <div className="grid grid-cols-[130px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Fetus Information:</span>
+                <span className="text-slate-900">{fetusInfo}</span>
+              </div>
+              <div className="grid grid-cols-[130px_1fr] items-baseline">
+                <span className="font-semibold text-slate-600">Indication:</span>
+                <span className="font-medium text-slate-900">{indication}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ========================================================================= */}
+        {/* 1. ECHO DETAILS                                                           */}
+        {/* ========================================================================= */}
+        <section className="mb-10">
+          <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-2 mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950 uppercase tracking-wide">
+              1. Echo Details
+            </h2>
+          </div>
+
+          <div className="space-y-6">
+            {/* 1.1 Position, Situs and Connections */}
+            <EchoSubsection title="1.1 Position, Situs and Connections" items={echoPosition} />
+
+            {/* 1.2 Atria and Septa */}
+            <EchoSubsection title="1.2 Atria and Septa" items={echoAtriaSepta} />
+
+            {/* 1.3 Valves */}
+            <EchoSubsection title="1.3 Valves" items={echoValves} />
+
+            {/* 1.4 Ventricles and Function */}
+            <EchoSubsection title="1.4 Ventricles and Function" items={echoVentricles} />
+
+            {/* 1.5 Great Arteries & Outflow Tracts */}
+            <EchoSubsection title="1.5 Great Arteries & Outflow Tracts" items={echoGreatArteries} />
+
+            {/* 1.6 Aortic & Ductal Arches */}
+            <EchoSubsection title="1.6 Aortic & Ductal Arches" items={echoArches} />
+
+            {/* 1.7 Pericardium & Effusions */}
+            <EchoSubsection title="1.7 Pericardium & Effusions" items={echoPericardium} />
+
+            {/* Extended fields if recorded */}
+            {echoExtended.length > 0 && (
+              <EchoSubsection title="Additional Targeted Fetal Echo Views" items={echoExtended} />
+            )}
+
+            {/* 1.8 Additional Details / Narrative Comments */}
+            <div className="rounded-lg border border-slate-200 bg-white p-4 avoid-break">
+              <h3 className="text-xs sm:text-sm font-bold text-slate-800 uppercase tracking-wide mb-3 border-b border-slate-100 pb-1.5">
+                1.8 Additional Details
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded border border-slate-100 bg-slate-50/50 p-3">
+                  <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Additional Comments:</div>
+                  {additionalComments ? (
+                    <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{additionalComments}</div>
+                  ) : (
+                    <div className="text-xs text-slate-400 italic">No additional comments recorded.</div>
+                  )}
+                </div>
+                <div className="rounded border border-slate-100 bg-slate-50/50 p-3">
+                  <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Default Normal Comments:</div>
+                  {normalComments ? (
+                    <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{normalComments}</div>
+                  ) : (
+                    <div className="text-xs text-slate-400 italic">No default normal comments recorded.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* 2. BIOMETRY                                                               */}
+        {/* ========================================================================= */}
+        <section className="mb-10 avoid-break">
+          <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-2 mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950 uppercase tracking-wide">
+              2. Biometry
+            </h2>
+          </div>
+
+          <p className="text-xs text-slate-500 mb-3">
+            Fetal cardiac and thoracic biometric measurements with corresponding standard deviation (Z-scores) relative to gestational age.
+          </p>
+
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead>
+                <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-800 font-bold uppercase text-[11px]">
+                  <th className="py-2 px-3 w-12 text-center">#</th>
+                  <th className="py-2 px-4">Measurement</th>
+                  <th className="py-2 px-4 w-44">Measured Value</th>
+                  <th className="py-2 px-4 w-36">Z-Score</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {biometryList.map((item, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                    <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                    <td className="py-2 px-4 font-medium text-slate-900">{item.label}</td>
+                    <td className="py-2 px-4 font-mono">{fmtValue(item.val)}</td>
+                    <td className="py-2 px-4 font-mono">{fmtZ(item.z)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* 3. DOPPLER                                                                */}
+        {/* ========================================================================= */}
+        <section className="mb-10 avoid-break">
+          <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-2 mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950 uppercase tracking-wide">
+              3. Doppler
+            </h2>
+          </div>
+
+          <p className="text-xs text-slate-500 mb-3">
+            Pulsed-wave and color Doppler hemodynamic flow velocity measurements and pulsatility / resistive indices.
+          </p>
+
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full border-collapse text-left text-xs">
+              <thead>
+                <tr className="bg-slate-100/80 border-b border-slate-200 text-slate-800 font-bold uppercase text-[11px]">
+                  <th className="py-2 px-3 w-12 text-center">#</th>
+                  <th className="py-2 px-4">Doppler Parameter</th>
+                  <th className="py-2 px-4 w-52">Measured Velocity / Index</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {dopplerList.map((item, idx) => (
+                  <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}>
+                    <td className="py-2 px-3 text-center text-slate-400 font-mono text-[11px]">{idx + 1}</td>
+                    <td className="py-2 px-4 font-medium text-slate-900">{item.label}</td>
+                    <td className="py-2 px-4 font-mono">{fmtValue(item.val)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* ========================================================================= */}
+        {/* 4. IMPRESSION                                                             */}
+        {/* ========================================================================= */}
+        <section className="mb-8 avoid-break">
+          <div className="flex items-center gap-2 border-b-2 border-slate-800 pb-2 mb-4">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-950 uppercase tracking-wide">
+              4. Impression
+            </h2>
+          </div>
+
+          {/* 4.1 Report & Administrative Details */}
+          <div className="mb-5 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+            <h3 className="text-xs font-bold text-teal-900 uppercase tracking-wide mb-3 border-b border-slate-200 pb-1">
+              Report Details
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+              <div>
+                <span className="text-slate-500 block text-[11px]">Type of Report:</span>
+                <span className="font-semibold text-slate-900">{reportType}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">First Line of Report:</span>
+                <span className="font-medium text-slate-900">{firstLine}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Primary Consultant:</span>
+                <span className="font-bold text-slate-900">{primaryConsultant}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Second Consultant:</span>
+                <span className="text-slate-800">{secondConsultant}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Report Signed By (L):</span>
+                <span className="text-slate-800">{signedByLeft}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Report Signed By (R):</span>
+                <span className="text-slate-800">{signedByRight}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Audit Done:</span>
+                <span className="text-slate-800">{auditDone}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Report Done:</span>
+                <span className="font-semibold text-slate-900">{reportDone}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Audited By:</span>
+                <span className="text-slate-800">{auditedBy}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block text-[11px]">Report Typed By:</span>
+                <span className="text-slate-800">{typedBy}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Header Comments if present */}
+          {headerComments && (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+              <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Header Comments:</div>
+              <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{headerComments}</div>
+            </div>
+          )}
+
+          {/* Final Impression & Recommendations */}
+          <div className="space-y-4 mb-6">
+            <div className="rounded-lg border-2 border-slate-800 bg-white p-4 sm:p-5">
+              <div className="text-xs font-bold text-slate-900 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4 text-teal-700" />
+                Final Impression:
+              </div>
+              <div className="text-xs sm:text-sm text-slate-900 font-semibold whitespace-pre-line leading-relaxed">
+                {finalImpression}
+              </div>
+            </div>
+
+            {recommendations && (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div className="text-[11px] font-bold text-slate-700 uppercase mb-1">Recommendations:</div>
+                <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{recommendations}</div>
+              </div>
+            )}
+
+            {footerComments && (
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Footer Comments:</div>
+                <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{footerComments}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Doctor Signature, Qualifications & Statutory Registration */}
+          <div className="pt-6 border-t border-slate-300 grid grid-cols-1 md:grid-cols-2 gap-6 items-end avoid-break">
+            <div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 font-semibold">
+                Disclaimer
+              </div>
+              <p className="text-[10px] sm:text-[11px] text-slate-500 leading-relaxed text-justify">
+                {disclaimer}
+              </p>
+              <div className="mt-2 text-xs font-bold text-slate-900">
+                {doctorRegistration}
+              </div>
+            </div>
+
+            <div className="text-right flex flex-col items-end">
+              <div
+                className="font-serif italic text-2xl text-slate-800 tracking-wider mb-1 select-none"
+                style={{ fontFamily: 'Georgia, "Brush Script MT", cursive' }}
+              >
+                Dr. Shanthi
+              </div>
+              <div className="text-xs font-bold text-slate-950 uppercase">
+                {primaryConsultant || 'DR C.SHANTHI'}
+              </div>
+              <div className="text-[11px] font-medium text-slate-600">
+                MBBS, DCH, DNB(PED) FNB(PED CARDIO)
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Senior Consultant Fetal Cardiologist
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* Print CSS rules */}
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 10mm 12mm 12mm 12mm;
+          }
+          body {
+            background: white !important;
+            color: black !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .avoid-break {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+function EchoSubsection({ title, items }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden avoid-break">
+      <div className="bg-slate-100/70 border-b border-slate-200 px-3.5 py-2">
+        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wide">{title}</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead>
+            <tr className="border-b border-slate-100 text-[10px] font-bold text-slate-500 uppercase bg-slate-50/50">
+              <th className="py-1.5 px-3.5 w-1/3">Parameter</th>
+              <th className="py-1.5 px-3.5 w-1/4">Finding</th>
+              <th className="py-1.5 px-3.5 w-5/12">Comments</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((item, idx) => (
+              <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'}>
+                <td className="py-2 px-3.5 font-medium text-slate-900">{item.label}</td>
+                <td className="py-2 px-3.5">{fmtEchoVal(item.val)}</td>
+                <td className="py-2 px-3.5">{fmtEchoComment(item.comment)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
+}
+
+function fmtEchoVal(val) {
+  if (val === undefined || val === null || String(val).trim() === '') {
+    return <span className="text-slate-400 italic text-[11px]">Not recorded</span>
+  }
+  const str = String(val)
+  const isAbnormal = str.toLowerCase() === 'abnormal'
+  return (
+    <span className={`inline-block font-semibold px-2 py-0.5 rounded text-[11px] ${
+      isAbnormal ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'text-slate-800'
+    }`}>
+      {str}
+    </span>
+  )
+}
+
+function fmtEchoComment(val) {
+  if (!val || String(val).trim() === '') return <span className="text-slate-400 italic text-[11px]">—</span>
+  return <span className="text-slate-700 whitespace-pre-line text-xs">{String(val)}</span>
 }
