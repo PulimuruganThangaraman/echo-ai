@@ -574,7 +574,43 @@ export default function Visits() {
     return 'bg-amber-50 text-amber-700 border-amber-200'
   }
 
-  // Map enriched visits for all-visits master directory
+  // When a patient is selected (e.g. from Patients Directory or search dropdown),
+  // display ONLY that patient's visits. When no patient is selected, display all clinic visits.
+  const sourceVisits = useMemo(() => {
+    if (selectedPatient) {
+      const patientVisitsMap = new Map()
+      // Include any visits fetched for this specific patient
+      visits.forEach((v) => {
+        if (v && v.id) patientVisitsMap.set(String(v.id), v)
+      })
+
+      // Also match from allVisits for this patient id or PAT code
+      const pIdStr = String(selectedPatient)
+      const pCodeStr = patient?.patient_id ? String(patient.patient_id) : ''
+      const pDbIdStr = patient?.id ? String(patient.id) : ''
+
+      allVisits.forEach((v) => {
+        if (!v) return
+        const vPid = String(v.patient_id)
+        const vDispId = String(v.patient_display_id || '')
+        if (
+          vPid === pIdStr ||
+          vPid === pDbIdStr ||
+          (pCodeStr && (vPid === pCodeStr || vDispId === pCodeStr))
+        ) {
+          if (!patientVisitsMap.has(String(v.id))) {
+            patientVisitsMap.set(String(v.id), v)
+          }
+        }
+      })
+
+      return Array.from(patientVisitsMap.values())
+    }
+
+    return allVisits
+  }, [selectedPatient, patient, visits, allVisits])
+
+  // Map enriched visits
   const enrichedVisits = useMemo(() => {
     const patientMap = new Map()
     patients.forEach((p) => {
@@ -587,7 +623,7 @@ export default function Visits() {
       if (s.visit_id) scansByVisitId.set(String(s.visit_id), s)
     })
 
-    return allVisits.map((v) => {
+    return sourceVisits.map((v) => {
       const p = patientMap.get(String(v.patient_id))
       const dateInfo = parseVisitDate(v.visit_date)
       const matchedScan = scansByVisitId.get(String(v.id))
@@ -637,7 +673,7 @@ export default function Visits() {
         dateInfo,
       }
     })
-  }, [allVisits, patients, allClinicScans])
+  }, [sourceVisits, patients, patient, allClinicScans])
 
   const filterCounts = useMemo(() => {
     let today = 0
@@ -1148,19 +1184,39 @@ export default function Visits() {
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-teal-600" />
                 <h2 className="text-base font-bold text-slate-900">
-                  Appointments & Visits Directory
+                  {selectedPatient && patient
+                    ? `Visits & Appointments for ${patient.first_name || ''} ${patient.last_name || ''}`.trim()
+                    : 'Appointments & Visits Directory'}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-100 text-teal-800 border border-teal-200">
                   {filteredVisits.length} {filteredVisits.length === 1 ? 'Record' : 'Records'}
                 </span>
+                {selectedPatient && (
+                  <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                    Patient Filter Active
+                  </span>
+                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5">
-                Comprehensive directory of clinic appointments, echo scans, and doctor consultations.
+                {selectedPatient && patient
+                  ? `Showing appointments and past visit records for ${patient.first_name || ''} ${patient.last_name || ''} (${patient.patient_id}).`
+                  : 'Comprehensive directory of clinic appointments, echo scans, and doctor consultations across all patients.'}
               </p>
             </div>
 
-            {/* Search Input Box */}
-            <div className="flex items-center gap-2">
+            {/* Search Input Box & Switchers */}
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+              {selectedPatient && (
+                <button
+                  type="button"
+                  onClick={() => selectPatient('', true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-semibold shadow-2xs transition shrink-0 cursor-pointer"
+                  title="Switch to view all clinic appointments across all patients"
+                >
+                  <Users className="h-3.5 w-3.5 text-teal-600" />
+                  <span>View All Clinic Appointments ({allVisits.length})</span>
+                </button>
+              )}
               <div className="relative w-full sm:w-72">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <input
@@ -1337,15 +1393,17 @@ export default function Visits() {
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => selectPatient(visit.patient_id, true)}
-                          title={`Schedule another appointment for ${visit.patientName}`}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 shadow-2xs transition cursor-pointer"
-                        >
-                          <CalendarCheck className="h-3 w-3 text-teal-600" />
-                          <span>Schedule</span>
-                        </button>
+                        {!selectedPatient && (
+                          <button
+                            type="button"
+                            onClick={() => selectPatient(visit.patient_id, true)}
+                            title={`Schedule another appointment for ${visit.patientName}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold bg-white border border-slate-200 text-slate-700 hover:bg-teal-50 hover:border-teal-300 hover:text-teal-800 shadow-2xs transition cursor-pointer"
+                          >
+                            <CalendarCheck className="h-3 w-3 text-teal-600" />
+                            <span>Schedule</span>
+                          </button>
+                        )}
 
                         {!currentUser.isFrontDesk ? (
                           <button
@@ -1395,24 +1453,41 @@ export default function Visits() {
           {paginatedVisits.length === 0 && (
             <div className="py-12 text-center bg-white">
               <Calendar className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-slate-700">No appointments found</p>
+              <p className="text-sm font-semibold text-slate-700">
+                {selectedPatient && patient
+                  ? `No visits recorded yet for ${patient.first_name || ''} ${patient.last_name || ''}`
+                  : 'No appointments found'}
+              </p>
               <p className="text-xs text-slate-500 mt-1">
-                {tableSearchQuery
+                {selectedPatient && patient
+                  ? 'Use the "Schedule New Appointment" form above to book their first visit.'
+                  : tableSearchQuery
                   ? `No appointments match your search "${tableSearchQuery}".`
                   : `No appointments match the filter "${activeTabMeta.label}".`}
               </p>
-              {(tableSearchQuery || activeFilter !== 'all') && (
+              {selectedPatient ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    setTableSearchQuery('')
-                    handleFilterClick('all')
-                  }}
-                  className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold hover:bg-teal-100 cursor-pointer"
+                  onClick={() => selectPatient('', true)}
+                  className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold hover:bg-teal-100 cursor-pointer"
                 >
-                  <RefreshCw className="h-3 w-3" />
-                  <span>Reset All Filters</span>
+                  <Users className="h-3.5 w-3.5 text-teal-600" />
+                  <span>View All Clinic Appointments ({allVisits.length})</span>
                 </button>
+              ) : (
+                (tableSearchQuery || activeFilter !== 'all') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTableSearchQuery('')
+                      handleFilterClick('all')
+                    }}
+                    className="mt-3 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 text-xs font-semibold hover:bg-teal-100 cursor-pointer"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                    <span>Reset All Filters</span>
+                  </button>
+                )
               )}
             </div>
           )}
