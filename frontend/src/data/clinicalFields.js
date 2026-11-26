@@ -135,7 +135,7 @@ export const impressionFields = [
   t('firstLine', 'First line of report'),
   t('primaryConsultant', 'Primary consultant *'),
   t('secondConsultant', 'Second consultant (optional)'),
-  t('signedByLeft', 'Report signed by (L)'),
+  t('signedByLeft', 'Report signed by (L) *'),
   t('signedByRight', 'Report signed by (R)'),
   s('auditDone', 'Audit done', ['No', 'Yes']),
   s('reportDone', 'Report done', ['Not completed', 'In progress', 'Completed']),

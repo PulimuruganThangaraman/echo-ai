@@ -22,7 +22,7 @@ import FetalEchoReport from './pages/FetalEchoReport'
 import AdultEchoReport from './pages/AdultEchoReport'
 import PediatricEchoReport from './pages/PediatricEchoReport'
 import EchoScan from './pages/EchoScan'
-import Profile from './pages/Profile'
+// import Profile from './pages/Profile' // Temporarily disabled Doctor Profile
 import { getCurrentUser } from './api/authService'
 
 function isSignedIn() {
@@ -158,8 +158,14 @@ function App() {
         <Route path="/settings" element={
           <ClinicalPage><Settings /></ClinicalPage>
         } />
+        {/* Temporarily disabled Doctor Profile route */}
+        {/*
         <Route path="/profile" element={
           <ClinicalPage><Profile /></ClinicalPage>
+        } />
+        */}
+        <Route path="/profile" element={
+          <Navigate to="/dashboard" replace />
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

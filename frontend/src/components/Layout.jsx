@@ -107,7 +107,7 @@ function Layout({ children }) {
                 if (currentUser.isFrontDesk) {
                   navigate('/patients')
                 } else {
-                  navigate('/profile')
+                  // navigate('/profile') // Temporarily disabled Doctor Profile navigation
                 }
               }}
               className={`group relative flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white shadow-2xs hover:ring-2 transition cursor-pointer ${

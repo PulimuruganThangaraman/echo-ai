@@ -52,7 +52,7 @@ function Sidebar() {
         { path: '/reports', icon: FileText, label: 'Reports' },
         { path: '/analytics', icon: BarChart3, label: 'Analytics' },
         { path: '/settings', icon: Cog, label: 'Settings' },
-        { path: '/profile', icon: User, label: 'Doctor Profile' },
+        // { path: '/profile', icon: User, label: 'Doctor Profile' }, // Temporarily disabled Doctor Profile menu item
       ]
 
   const isItemActive = (itemPath) => {

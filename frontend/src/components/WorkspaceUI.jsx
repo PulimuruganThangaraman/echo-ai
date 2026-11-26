@@ -61,7 +61,15 @@ export function Field({ label, optionField, addable = false, type = 'text', valu
 
   return (
     <div className="field-label">
-      <span>{label}</span>
+      <span>
+        {typeof label === 'string' && label.includes('*') ? (
+          <>
+            {label.replace(/\s*\*$/, '')} <span className="text-red-500 font-bold">*</span>
+          </>
+        ) : (
+          label
+        )}
+      </span>
       {type === 'select' && addable ? (
         <AddableSelect
           field={`select_${optionField || String(label).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`}
