@@ -39,7 +39,10 @@ export default function SearchableSelect({
       (opt) =>
         opt.label.toLowerCase().includes(q) ||
         String(opt.value).toLowerCase().includes(q) ||
-        (opt.badge && String(opt.badge).toLowerCase().includes(q))
+        (opt.badge && String(opt.badge).toLowerCase().includes(q)) ||
+        (opt.phone && String(opt.phone).toLowerCase().includes(q)) ||
+        (opt.aadhaar && String(opt.aadhaar).toLowerCase().includes(q)) ||
+        (opt.subtext && String(opt.subtext).toLowerCase().includes(q))
     )
   }, [options, searchQuery])
 
@@ -146,16 +149,16 @@ export default function SearchableSelect({
 
           {/* Options List */}
           <div className="max-h-56 overflow-y-auto p-1 text-sm scrollbar-thin scrollbar-thumb-slate-200">
-            {/* Clear/Unselect Option */}
-            <div
-              onClick={() => handleSelect('')}
-              className={`flex cursor-pointer items-center justify-between rounded-md px-3 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 ${
-                value === '' ? 'bg-slate-50 text-slate-900 font-semibold' : ''
-              }`}
-            >
-              <span>{placeholder}</span>
-              {value === '' && <Check className="h-3.5 w-3.5 text-teal-600" />}
-            </div>
+            {/* Clear/Unselect Option - only show when something is selected and no search query */}
+            {value !== '' && value !== null && value !== undefined && !searchQuery.trim() && (
+              <div
+                onClick={() => handleSelect('')}
+                className="flex cursor-pointer items-center justify-between rounded-md px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-100 mb-1 border-b border-slate-100"
+              >
+                <span>Clear selection</span>
+                <X className="h-3 w-3 text-slate-400" />
+              </div>
+            )}
 
             {filteredOptions.length > 0 ? (
               filteredOptions.map((opt) => {
@@ -170,7 +173,14 @@ export default function SearchableSelect({
                         : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <span className="truncate pr-2">{opt.label}</span>
+                    <div className="flex flex-col truncate pr-2">
+                      <span className="truncate font-medium">{opt.label}</span>
+                      {opt.phone && (
+                        <span className="text-[11px] text-slate-400 font-normal">
+                          Phone: {opt.phone}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {opt.badge && (
                         <span
@@ -190,7 +200,7 @@ export default function SearchableSelect({
               })
             ) : (
               <div className="px-3 py-4 text-center text-xs text-slate-400">
-                No matching results
+                {options.length === 0 ? 'No patients found' : `No patients match "${searchQuery}"`}
               </div>
             )}
           </div>

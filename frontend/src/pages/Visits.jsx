@@ -39,6 +39,7 @@ export default function Visits() {
     searchParams.get('patient') || searchParams.get('patientId') || searchParams.get('patient_id') || ''
   const [patients, setPatients] = useState([])
   const [selectedPatient, setSelectedPatient] = useState('')
+  const [activePatientRecord, setActivePatientRecord] = useState(null)
   const [visits, setVisits] = useState([])
   const [allVisits, setAllVisits] = useState([])
   const [scans, setScans] = useState([])
@@ -140,6 +141,8 @@ export default function Visits() {
         label: `${item.patient_id || ''} — ${item.first_name || ''} ${item.last_name || ''}`.trim(),
         badge: visitLabel,
         visitCount: vCount,
+        phone: item.mobile || item.phone1 || item.phone2 || '',
+        aadhaar: item.aadhar_number || item.aadhaar_no || '',
       }
     })
   }, [patients, visitCountsByPatient])
@@ -166,16 +169,51 @@ export default function Visits() {
 
   // Sync selected patient when URL patientParam or patientList changes
   useEffect(() => {
-    if (!patients.length) return
-    if (patientParam) {
+    if (!patientParam) {
+      if (selectedPatient) {
+        setSelectedPatient('')
+        setActivePatientRecord(null)
+      }
+      return
+    }
+
+    // First try finding in current patients list
+    if (patients.length > 0) {
       const found = patients.find(
         (p) => String(p.id) === String(patientParam) || String(p.patient_id) === String(patientParam)
       )
-      if (found && String(found.id) !== String(selectedPatient)) {
-        selectPatient(found.id, false)
+      if (found) {
+        setActivePatientRecord(found)
+        if (String(found.id) !== String(selectedPatient)) {
+          selectPatient(found.id, false)
+        }
+        return
       }
     }
-  }, [patientParam, patients, selectedPatient])
+
+    // Direct fetch by ID or PAT ID so direct URL /visits?patient=107 works immediately
+    let isCancelled = false
+    patientService
+      .getPatient(patientParam)
+      .then((res) => {
+        if (isCancelled) return
+        const pData = res?.data || res
+        if (pData && (pData.id || pData.patient_id)) {
+          setActivePatientRecord(pData)
+          setSelectedPatient(pData.id)
+          setPatients((prev) => {
+            if (prev.some((p) => String(p.id) === String(pData.id))) return prev
+            return [pData, ...prev]
+          })
+          selectPatient(pData.id, false)
+        }
+      })
+      .catch(() => {})
+
+    return () => {
+      isCancelled = true
+    }
+  }, [patientParam, patients])
 
   const selectPatient = async (patientId, syncUrl = true) => {
     setSelectedPatient(patientId)
@@ -191,14 +229,19 @@ export default function Visits() {
     }
 
     if (!patientId) {
+      setActivePatientRecord(null)
       setVisits([])
       setScans([])
       return
     }
 
-    const patientRecord = patients.find((p) => String(p.id) === String(patientId))
+    const patientRecord =
+      activePatientRecord && String(activePatientRecord.id) === String(patientId)
+        ? activePatientRecord
+        : patients.find((p) => String(p.id) === String(patientId))
     if (patientRecord) {
-      const docName = patientRecord.family_doctor || patientRecord.referral_doctor || ''
+      setActivePatientRecord(patientRecord)
+      const docName = patientRecord.family_doctor || patientRecord.referral_doctor || patientRecord.referred_by || ''
       if (docName) {
         setVisitData((prev) => ({
           ...prev,
@@ -210,10 +253,20 @@ export default function Visits() {
 
     setLoading(true)
     try {
-      const [visitResult, scanResult] = await Promise.all([
-        patientService.getVisits(patientId),
-        scanService.getScansByPatient(patientId),
+      const [patientRes, visitResult, scanResult] = await Promise.all([
+        patientService.getPatient(patientId).catch(() => null),
+        patientService.getVisits(patientId).catch(() => ({ data: [] })),
+        scanService.getScansByPatient(patientId).catch(() => ({ data: [] })),
       ])
+      if (patientRes?.data) {
+        setActivePatientRecord(patientRes.data)
+        setPatients((prev) => {
+          if (prev.some((p) => String(p.id) === String(patientRes.data.id))) {
+            return prev.map((p) => (String(p.id) === String(patientRes.data.id) ? { ...p, ...patientRes.data } : p))
+          }
+          return [patientRes.data, ...prev]
+        })
+      }
       setVisits(visitResult.data || [])
       setScans(scanResult.data || [])
     } catch {
@@ -406,7 +459,14 @@ export default function Visits() {
     setStatus('Visit removed from this patient')
   }
 
-  const patient = patients.find((item) => String(item.id) === String(selectedPatient))
+  const patient =
+    activePatientRecord &&
+    (String(activePatientRecord.id) === String(selectedPatient) ||
+      String(activePatientRecord.patient_id) === String(selectedPatient))
+      ? activePatientRecord
+      : patients.find(
+          (item) => String(item.id) === String(selectedPatient) || String(item.patient_id) === String(selectedPatient)
+        ) || activePatientRecord
 
   const getScanBadgeClass = (scanType) => {
     if (scanType === 'Adult Echo') return 'bg-sky-50 text-sky-700 border-sky-200'
@@ -479,28 +539,28 @@ export default function Visits() {
             <PatientField label="Patient ID" value={patient?.patient_id} />
             <PatientField label="First name" value={patient?.first_name} />
             <PatientField label="Last name" value={patient?.last_name} />
-            <PatientField label="Aadhaar number" value={patient?.aadhaar_no} />
-            <PatientField label="Gender" value={patient?.gender} />
+            <PatientField label="Aadhaar number" value={patient?.aadhaar_no || patient?.aadhar_number} />
+            <PatientField label="Gender" value={patient?.gender === 'M' ? 'Male' : patient?.gender === 'F' ? 'Female' : patient?.gender} />
             <PatientField
               label="Age"
               value={patient?.age ? `${patient.age} ${patient.age_unit || 'Years'}` : ''}
             />
             <PatientField label="Date of birth" value={patient?.dob} />
             <PatientField label="Ethnic origin" value={patient?.ethnic_origin} />
-            <PatientField label="Street" value={patient?.street} wide />
+            <PatientField label="Street" value={patient?.street || patient?.address} wide />
             <PatientField label="Taluk" value={patient?.taluk} />
             <PatientField label="Area" value={patient?.area} />
             <PatientField label="Area (P.O.)" value={patient?.area_po} />
-            <PatientField label="Zip code" value={patient?.zip_code} />
-            <PatientField label="City" value={patient?.district_city} />
+            <PatientField label="Zip code" value={patient?.zip_code || patient?.pincode} />
+            <PatientField label="City" value={patient?.district_city || patient?.city} />
             <PatientField label="State" value={patient?.state} />
-            <PatientField label="Country" value={patient?.country} />
+            <PatientField label="Country" value={patient?.country || 'India'} />
             <PatientField label="Phone #1" value={patient?.phone1} />
             <PatientField label="Phone #2" value={patient?.phone2} />
             <PatientField label="Mobile" value={patient?.mobile} />
             <PatientField label="Fax" value={patient?.fax} />
             <PatientField label="Email" value={patient?.email} wide />
-            <PatientField label="Family doctor" value={patient?.family_doctor} wide />
+            <PatientField label="Family doctor" value={patient?.family_doctor || patient?.referred_by} wide />
           </div>
           <div className="flex min-h-40 flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
             {patient ? (

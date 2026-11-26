@@ -6,6 +6,8 @@ function getApiBaseUrl() {
     return '/api';
   }
   let url = raw.replace(/\/+$/, '');
+  // On Windows, localhost often resolves to IPv6 (::1) which connection-refuses when backend binds IPv4 127.0.0.1
+  url = url.replace('http://localhost:8002', 'http://127.0.0.1:8002');
   if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
     url = `https://${url}`;
   }

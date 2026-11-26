@@ -18,7 +18,6 @@ import {
   FileText,
   UserCheck,
   AlertCircle,
-  Sparkles,
   CalendarCheck,
 } from 'lucide-react'
 import { patientService } from '../api/patientService'
@@ -88,27 +87,6 @@ function NewPatient() {
     window.addEventListener('echoai_user_updated', handleUserUpdate)
     return () => window.removeEventListener('echoai_user_updated', handleUserUpdate)
   }, [])
-
-  const handleAutoAssignId = async () => {
-    try {
-      const res = await patientService.getPatients()
-      const list = res.data || []
-      const numericIds = list
-        .map((p) => {
-          const match = String(p.patient_id || '').match(/\d+/)
-          return match ? parseInt(match[0], 10) : 0
-        })
-        .filter((n) => !isNaN(n) && n > 0)
-      const highest = numericIds.length > 0 ? Math.max(...numericIds) : 1001230
-      const nextId = `PAT${highest + 1}`
-      updateFormField('patient_id', nextId)
-      clearFieldError('patient_id')
-    } catch {
-      const fallbackId = `PAT${Date.now().toString().slice(-6)}`
-      updateFormField('patient_id', fallbackId)
-      clearFieldError('patient_id')
-    }
-  }
 
   useEffect(() => {
     return () => {
@@ -454,18 +432,7 @@ function NewPatient() {
                 <div className="p-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <label className={labelClass}>Patient ID *</label>
-                        <button
-                          type="button"
-                          onClick={handleAutoAssignId}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-teal-700 hover:text-teal-900 bg-teal-50 hover:bg-teal-100 border border-teal-200/90 px-2 py-0.5 rounded-md transition cursor-pointer"
-                          title="Auto-assign next sequential alphanumeric Patient ID"
-                        >
-                          <Sparkles className="w-3 h-3 text-teal-600" />
-                          <span>Auto-assign ID</span>
-                        </button>
-                      </div>
+                      <label className={labelClass}>Patient ID *</label>
                       <input
                         id="field-patient_id"
                         type="text"
