@@ -214,7 +214,7 @@ export default function Dashboard() {
       iconBg: 'bg-[#3b82f6]', // blue
       strokeColor: '#3b82f6',
       path: 'M0,24 Q15,20 30,22 T60,14 T90,16 T120,5',
-      link: '/echo-studies',
+      link: '/visits?filter=scans',
     },
     {
       title: 'TOTAL VISITS',
@@ -225,7 +225,7 @@ export default function Dashboard() {
       iconBg: 'bg-[#8b5cf6]', // purple
       strokeColor: '#8b5cf6',
       path: 'M0,20 Q15,24 30,16 T60,22 T90,10 T120,8',
-      link: '/visits',
+      link: '/visits?filter=all',
     },
     {
       title: "TODAY'S VISITS",
@@ -236,7 +236,7 @@ export default function Dashboard() {
       iconBg: 'bg-[#f97316]', // orange
       strokeColor: '#f97316',
       path: 'M0,22 Q15,18 30,24 T60,16 T90,20 T120,12',
-      link: '/visits',
+      link: '/visits?filter=today',
     },
     {
       title: 'UPCOMING VISITS',
@@ -247,7 +247,7 @@ export default function Dashboard() {
       icon: Calendar,
       iconBg: 'bg-[#0284c7]', // cyan/blue
       strokeColor: '#0284c7',
-      link: '/visits',
+      link: '/visits?filter=upcoming',
     },
     {
       title: 'ADULT ECHO',
@@ -257,7 +257,7 @@ export default function Dashboard() {
       icon: Heart,
       iconBg: 'bg-[#7c3aed]', // purple
       strokeColor: '#7c3aed',
-      link: currentUser.isFrontDesk ? '/visits' : '/adult-echo-report',
+      link: '/visits?filter=Adult Echo',
     },
     {
       title: 'FETAL ECHO',
@@ -267,7 +267,7 @@ export default function Dashboard() {
       icon: Baby,
       iconBg: 'bg-[#ec4899]', // pink
       strokeColor: '#ec4899',
-      link: currentUser.isFrontDesk ? '/visits' : '/fetal-echo-report',
+      link: '/visits?filter=Fetal Echo',
     },
     {
       title: 'PEDIATRIC ECHO',
@@ -277,7 +277,7 @@ export default function Dashboard() {
       icon: Smile,
       iconBg: 'bg-[#f97316]', // orange
       strokeColor: '#f97316',
-      link: currentUser.isFrontDesk ? '/visits' : '/pediatric-echo-report',
+      link: '/visits?filter=Pediatric Echo',
     },
   ]
 
@@ -445,7 +445,8 @@ export default function Dashboard() {
             <div
               key={card.title}
               onClick={() => navigate(card.link)}
-              className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs transition-all duration-200 hover:shadow-md hover:border-slate-300"
+              title={`Click to filter ${card.title} in Appointments & Visits`}
+              className="group relative cursor-pointer overflow-hidden rounded-2xl border border-slate-200/90 bg-white p-4 shadow-2xs transition-all duration-200 hover:shadow-md hover:border-teal-400 hover:-translate-y-0.5"
             >
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
@@ -459,7 +460,7 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  <div className="pt-2 text-xs">
+                  <div className="pt-2 text-xs flex items-center justify-between">
                     {card.isPositive ? (
                       <span className="font-semibold text-emerald-600">
                         {card.change}
@@ -473,6 +474,9 @@ export default function Dashboard() {
                         {card.change}
                       </span>
                     )}
+                    <span className="opacity-0 group-hover:opacity-100 text-[10px] font-bold text-teal-600 flex items-center gap-0.5 transition-opacity duration-150">
+                      View →
+                    </span>
                   </div>
                 </div>
 

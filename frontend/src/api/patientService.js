@@ -283,8 +283,17 @@ export const patientService = {
   getAllVisits: async () => {
     try {
       const response = await api.get('/visits');
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        try {
+          localStorage.setItem('echoai_all_visits_cache', JSON.stringify(response.data));
+        } catch {}
+      }
       return response.data;
     } catch {
+      try {
+        const cached = localStorage.getItem('echoai_all_visits_cache');
+        if (cached) return JSON.parse(cached);
+      } catch {}
       return { success: true, data: [] };
     }
   },
