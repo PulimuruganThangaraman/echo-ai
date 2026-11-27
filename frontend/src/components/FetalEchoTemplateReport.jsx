@@ -38,9 +38,18 @@ export default function FetalEchoTemplateReport({
     return ''
   }
 
+  // Value empty check helper: distinguishes actual values (0, '0', false, 'No') from missing values
+  const isEmptyValue = (val) => {
+    if (val === undefined || val === null) return true
+    if (typeof val === 'number') return false
+    if (typeof val === 'boolean') return false
+    const s = String(val).trim()
+    return s === '' || s === '-' || s === '—'
+  }
+
   // Value formatting helper: empty displays 'Not recorded', never false defaults
   const fmtValue = (val) => {
-    if (val === undefined || val === null || String(val).trim() === '') {
+    if (isEmptyValue(val)) {
       return <span className="text-slate-400 font-normal italic text-[11px]">Not recorded</span>
     }
     return <span className="text-slate-900 font-medium">{String(val)}</span>
@@ -48,31 +57,48 @@ export default function FetalEchoTemplateReport({
 
   // Z-score formatting helper
   const fmtZ = (val) => {
-    if (val === undefined || val === null || String(val).trim() === '') {
-      return <span className="text-slate-400 italic">—</span>
+    if (isEmptyValue(val)) {
+      return <span className="text-slate-400 italic text-[11px]">Not recorded</span>
     }
     return <span className="font-semibold text-slate-800">{String(val)}</span>
   }
 
   // Comment formatting helper
   const fmtComment = (val) => {
-    if (!val || String(val).trim() === '') return <span className="text-slate-400 italic text-[11px]">—</span>
+    if (isEmptyValue(val)) return <span className="text-slate-400 italic text-[11px]">No comments</span>
     return <span className="text-slate-700 whitespace-pre-line text-xs">{String(val)}</span>
+  }
+
+  // Info / Admin metadata formatting helper
+  const fmtInfo = (val, fallback = 'Not available') => {
+    if (isEmptyValue(val)) {
+      return <span className="text-slate-400 italic text-[11px]">{fallback}</span>
+    }
+    return <span className="text-slate-900">{String(val)}</span>
   }
 
   // Patient & Visit demographics
   const rawSalutation = p.salutation || ''
   const rawName = `${p.first_name || ''} ${p.last_name || ''}`.trim()
-  const patientName = (rawSalutation ? `${rawSalutation} ${rawName}` : rawName) || d.patientName || d.patient_name || '—'
-  const resolvedPatientId = p.patient_id || d.patientDisplayId || d.patient_id || patientId || '—'
-  const age = p.age ? `${p.age} ${p.age_unit || 'Years'}` : (d.age ? `${d.age} Years` : '—')
-  const gender = p.gender || d.gender || '—'
-  const ageSex = `${age} / ${gender}`
-  const visitNo = v.visit_no || v.id || visitId || d.visitNo || d.visit_no || '—'
+  const patientNameVal = (rawSalutation ? `${rawSalutation} ${rawName}` : rawName) || d.patientName || d.patient_name
+  const patientName = isEmptyValue(patientNameVal) ? 'Not available' : patientNameVal
 
-  let visitDate = '—'
+  const patientIdVal = p.patient_id || d.patientDisplayId || d.patient_id || patientId
+  const resolvedPatientId = isEmptyValue(patientIdVal) ? 'Not available' : patientIdVal
+
+  const rawAge = p.age || d.age
+  const age = isEmptyValue(rawAge) ? 'Not available' : `${rawAge} ${p.age_unit || 'Years'}`
+  const gender = isEmptyValue(p.gender || d.gender) ? 'Not available' : (p.gender || d.gender)
+  const ageSex = (age !== 'Not available' && gender !== 'Not available')
+    ? `${age} / ${gender}`
+    : (age !== 'Not available' ? age : (gender !== 'Not available' ? gender : 'Not available'))
+
+  const visitNoVal = v.visit_no || v.id || visitId || d.visitNo || d.visit_no
+  const visitNo = isEmptyValue(visitNoVal) ? 'Not available' : visitNoVal
+
+  let visitDate = 'Not available'
   const rawDate = v.visit_date || d.visitDate || d.visit_date || d.created_at
-  if (rawDate) {
+  if (!isEmptyValue(rawDate)) {
     try {
       const parsed = new Date(rawDate)
       if (!isNaN(parsed.getTime())) {
@@ -85,16 +111,30 @@ export default function FetalEchoTemplateReport({
     }
   }
 
-  const referredBy = v.referral_doctor || p.referred_by || p.family_doctor || d.referredBy || d.referral_doctor || 'Self'
+  const refByVal = v.referral_doctor || p.referred_by || p.family_doctor || d.referredBy || d.referral_doctor
+  const referredBy = isEmptyValue(refByVal) ? 'Not available' : refByVal
 
   // Pregnancy / LMP details
-  const lmpDate = resolve('lmp', 'lmp.lmp_date') || '—'
-  const edd = resolve('edd', 'lmp.edd') || '—'
+  const lmpDateVal = resolve('lmp', 'lmp.lmp_date')
+  const lmpDate = isEmptyValue(lmpDateVal) ? 'Not available' : lmpDateVal
+
+  const eddVal = resolve('edd', 'lmp.edd')
+  const edd = isEmptyValue(eddVal) ? 'Not available' : eddVal
+
   const gaWeeks = resolve('gaWeeks', 'ga_weeks')
   const gaDays = resolve('gaDays', 'ga_days')
-  const ga = gaWeeks !== '' ? `${gaWeeks} Weeks${gaDays !== '' ? ` ${gaDays} Days` : ''}` : (resolve('ga') || '—')
-  const fetusInfo = resolve('fetuses', 'no_of_fetuses', 'lmp.no_of_fetuses') || 'Single'
-  const indication = resolve('indication', 'report.indication') || v.notes || '—'
+  let ga = 'Not available'
+  if (!isEmptyValue(gaWeeks)) {
+    ga = `${gaWeeks} Weeks${!isEmptyValue(gaDays) ? ` ${gaDays} Days` : ''}`
+  } else if (!isEmptyValue(resolve('ga'))) {
+    ga = resolve('ga')
+  }
+
+  const fetusVal = resolve('fetuses', 'no_of_fetuses', 'lmp.no_of_fetuses')
+  const fetusInfo = isEmptyValue(fetusVal) ? 'Not available' : fetusVal
+
+  const indicationVal = resolve('indication', 'report.indication') || v.notes
+  const indication = isEmptyValue(indicationVal) ? 'Not recorded' : indicationVal
 
   // Section 1: Echo Details Subsections
   const echoPosition = [
@@ -220,19 +260,19 @@ export default function FetalEchoTemplateReport({
 
   // Section 4: Impression Details
   const reportType = resolve('reportType', 'report_type') || 'Normal'
-  const firstLine = resolve('firstLine', 'first_line') || '—'
+  const firstLine = resolve('firstLine', 'first_line')
   const primaryConsultant = resolve('primaryConsultant', 'primary_consultant') || 'DR C.SHANTHI'
-  const secondConsultant = resolve('secondConsultant', 'second_consultant') || '—'
-  const signedByLeft = resolve('signedByLeft', 'signed_by_left') || '—'
-  const signedByRight = resolve('signedByRight', 'signed_by_right') || '—'
+  const secondConsultant = resolve('secondConsultant', 'second_consultant')
+  const signedByLeft = resolve('signedByLeft', 'signed_by_left')
+  const signedByRight = resolve('signedByRight', 'signed_by_right')
   const auditDone = resolve('auditDone', 'audit_done') || 'No'
   const reportDone = resolve('reportDone', 'report_done') || (d.reportCompleted ? 'Completed' : 'In progress')
-  const auditedBy = resolve('auditedBy', 'audited_by') || '—'
-  const typedBy = resolve('typedBy', 'report_typed_by') || '—'
+  const auditedBy = resolve('auditedBy', 'audited_by')
+  const typedBy = resolve('typedBy', 'report_typed_by')
 
   const headerComments = resolve('headerComments', 'header_comments')
   const footerComments = resolve('footerComments', 'footer_comments')
-  const finalImpression = resolve('impression', 'final_impression', 'conclusion') || '—'
+  const finalImpression = resolve('impression', 'final_impression', 'conclusion')
   const recommendations = resolve('recommendations')
   const disclaimer = resolve('disclaimer', 'disclaimerComments') ||
     'Limitation of Fetal Echocardiography is to be understood as intention of Fetal Echo is to rule out major cardiac defects and minor or evolving anomalies may not be detected. Sometimes it may not be possible to see certian types of holes or valve problems in fetal life. In addition heart rate/ rhythm problems or heart muscle diseases usually evolve during late gestation when second trimester scan may not show such abnormality.'
@@ -428,18 +468,18 @@ export default function FetalEchoTemplateReport({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="rounded border border-slate-100 bg-slate-50/50 p-3">
                   <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Additional Comments:</div>
-                  {additionalComments ? (
+                  {!isEmptyValue(additionalComments) ? (
                     <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{additionalComments}</div>
                   ) : (
-                    <div className="text-xs text-slate-400 italic">No additional comments recorded.</div>
+                    <div className="text-xs text-slate-400 italic">No comments</div>
                   )}
                 </div>
                 <div className="rounded border border-slate-100 bg-slate-50/50 p-3">
                   <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Default Normal Comments:</div>
-                  {normalComments ? (
+                  {!isEmptyValue(normalComments) ? (
                     <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{normalComments}</div>
                   ) : (
-                    <div className="text-xs text-slate-400 italic">No default normal comments recorded.</div>
+                    <div className="text-xs text-slate-400 italic">No comments</div>
                   )}
                 </div>
               </div>
@@ -543,23 +583,23 @@ export default function FetalEchoTemplateReport({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">First Line of Report:</span>
-                <span className="font-medium text-slate-900">{firstLine}</span>
+                {fmtInfo(firstLine, 'Not recorded')}
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Primary Consultant:</span>
-                <span className="font-bold text-slate-900">{primaryConsultant}</span>
+                <span className="font-bold text-slate-900">{fmtInfo(primaryConsultant, 'Not available')}</span>
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Second Consultant:</span>
-                <span className="text-slate-800">{secondConsultant}</span>
+                {fmtInfo(secondConsultant, 'Not available')}
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Report Signed By (L):</span>
-                <span className="text-slate-800">{signedByLeft}</span>
+                {fmtInfo(signedByLeft, 'Not available')}
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Report Signed By (R):</span>
-                <span className="text-slate-800">{signedByRight}</span>
+                {fmtInfo(signedByRight, 'Not available')}
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Audit Done:</span>
@@ -571,22 +611,24 @@ export default function FetalEchoTemplateReport({
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Audited By:</span>
-                <span className="text-slate-800">{auditedBy}</span>
+                {fmtInfo(auditedBy, 'Not available')}
               </div>
               <div>
                 <span className="text-slate-500 block text-[11px]">Report Typed By:</span>
-                <span className="text-slate-800">{typedBy}</span>
+                {fmtInfo(typedBy, 'Not available')}
               </div>
             </div>
           </div>
 
-          {/* Header Comments if present */}
-          {headerComments && (
-            <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
-              <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Header Comments:</div>
+          {/* Header Comments */}
+          <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
+            <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Header Comments:</div>
+            {!isEmptyValue(headerComments) ? (
               <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{headerComments}</div>
-            </div>
-          )}
+            ) : (
+              <div className="text-xs text-slate-400 italic">No comments</div>
+            )}
+          </div>
 
           {/* Final Impression & Recommendations */}
           <div className="space-y-4 mb-6">
@@ -596,23 +638,33 @@ export default function FetalEchoTemplateReport({
                 Final Impression:
               </div>
               <div className="text-xs sm:text-sm text-slate-900 font-semibold whitespace-pre-line leading-relaxed">
-                {finalImpression}
+                {!isEmptyValue(finalImpression) ? (
+                  finalImpression
+                ) : (
+                  <span className="text-slate-400 font-normal italic text-xs">Not recorded</span>
+                )}
               </div>
             </div>
 
-            {recommendations && (
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <div className="text-[11px] font-bold text-slate-700 uppercase mb-1">Recommendations:</div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="text-[11px] font-bold text-slate-700 uppercase mb-1">Recommendations:</div>
+              {!isEmptyValue(recommendations) ? (
                 <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{recommendations}</div>
-              </div>
-            )}
+              ) : (
+                <div className="text-xs text-slate-400 italic">No recommendations</div>
+              )}
+            </div>
 
-            {footerComments && (
+            {footerComments ? (
               <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <div className="text-[11px] font-bold text-slate-600 uppercase mb-1">Footer Comments:</div>
-                <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{footerComments}</div>
+                {!isEmptyValue(footerComments) ? (
+                  <div className="text-xs text-slate-800 whitespace-pre-line leading-relaxed">{footerComments}</div>
+                ) : (
+                  <div className="text-xs text-slate-400 italic">No comments</div>
+                )}
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Doctor Signature, Qualifications & Statutory Registration */}
@@ -707,10 +759,13 @@ function EchoSubsection({ title, items }) {
 }
 
 function fmtEchoVal(val) {
-  if (val === undefined || val === null || String(val).trim() === '') {
+  if (val === undefined || val === null) {
     return <span className="text-slate-400 italic text-[11px]">Not recorded</span>
   }
-  const str = String(val)
+  const str = String(val).trim()
+  if (str === '' || str === '-' || str === '—') {
+    return <span className="text-slate-400 italic text-[11px]">Not recorded</span>
+  }
   const isAbnormal = str.toLowerCase() === 'abnormal'
   return (
     <span className={`inline-block font-semibold px-2 py-0.5 rounded text-[11px] ${
@@ -722,6 +777,12 @@ function fmtEchoVal(val) {
 }
 
 function fmtEchoComment(val) {
-  if (!val || String(val).trim() === '') return <span className="text-slate-400 italic text-[11px]">—</span>
+  if (val === undefined || val === null) {
+    return <span className="text-slate-400 italic text-[11px]">No comments</span>
+  }
+  const str = String(val).trim()
+  if (str === '' || str === '-' || str === '—') {
+    return <span className="text-slate-400 italic text-[11px]">No comments</span>
+  }
   return <span className="text-slate-700 whitespace-pre-line text-xs">{String(val)}</span>
 }
